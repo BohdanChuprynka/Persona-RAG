@@ -1,0 +1,17 @@
+flowchart TD
+    A1[Telegram export.json] --> B1[telegram_parser]
+    A2[Instagram messages JSON] --> B2[instagram_parser]
+    B1 --> C[Normalize<br/>hash chat_id, drop empties,<br/>detect language]
+    B2 --> C
+    C --> D[PII redactor<br/>phones, emails, addresses,<br/>name list]
+    D --> E[Group into sessions<br/>by sender + time gap]
+    E --> F[Extract persona turns<br/>your_reply + incoming_context]
+    F --> G[Stylometry computer<br/>cache style anchors]
+    F --> H[OpenAI embedder<br/>batch=128]
+    H --> I[(LanceDB)]
+    F --> J[(SQLite<br/>conversations + persona_turns)]
+    G --> J
+
+    style C fill:#dbeafe
+    style D fill:#fef3c7
+    style H fill:#dcfce7

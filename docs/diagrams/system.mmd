@@ -1,0 +1,33 @@
+flowchart LR
+    subgraph Ingest[Ingest - run once]
+        A[Telegram + Instagram<br/>exports] --> B[Parse + PII redact]
+        B --> C[Conversation builder]
+        C --> D[Embedder<br/>OpenAI text-embedding-3-small]
+        D --> E[(LanceDB<br/>vectors)]
+        C --> F[(SQLite<br/>persona.db)]
+    end
+
+    subgraph Runtime[Runtime - per message]
+        G[Friend message] --> H[aiogram bot]
+        H --> I{Auth check}
+        I -- no --> J[Auth flow]
+        I -- yes --> K[Retriever]
+        K --> E
+        K --> L[Prompt builder]
+        L --> M[OpenAI gpt-4o-mini]
+        L --> N[(Per-user memory)]
+        M --> O[Guardrails]
+        O --> P[Telegram reply]
+    end
+
+    subgraph Admin[Admin]
+        Q[Admin commands<br/>users / revoke / pause / memory] --> H
+        J --> R[DM admin:<br/>Approve / Block]
+        R --> Q
+    end
+
+    F -.session log.-> N
+
+    style Ingest fill:#f0fdf4
+    style Runtime fill:#eff6ff
+    style Admin fill:#fef3c7

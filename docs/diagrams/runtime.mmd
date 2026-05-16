@@ -1,0 +1,25 @@
+flowchart TD
+    A[Friend sends Telegram message] --> B[aiogram message handler]
+    B --> C{From admin?}
+    C -- yes --> Z[Admin command router]
+    C -- no --> D{User state?}
+
+    D -- unknown --> E[Create pending record<br/>see AUTH-FLOW.md]
+    D -- pending --> F[Reply: still awaiting approval]
+    D -- blocked --> G[Silent ignore]
+    D -- whitelisted --> H[Load current session<br/>last K turns]
+
+    H --> I[Embed query:<br/>friend_msg + recent context]
+    I --> J[LanceDB top-K<br/>by cosine + recency rerank]
+    J --> K[Load per-user memory summary]
+    K --> L[Build prompt<br/>system + few-shot + session + msg]
+    L --> M[OpenAI Chat Completions<br/>gpt-4o-mini]
+    M --> N[Guardrails<br/>PII leak, length, refuse-list]
+    N --> O[Send Telegram reply]
+    O --> P[Append turn to session log]
+    P --> Q{Session timeout<br/>passed?}
+    Q -- yes --> R[Background: update<br/>user memory summary]
+
+    style E fill:#fef3c7
+    style M fill:#dbeafe
+    style N fill:#fee2e2

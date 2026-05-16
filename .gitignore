@@ -1,0 +1,55 @@
+# Secrets
+.env
+.env.local
+*.key
+
+# Data — never commit personal chats or vectors
+data/
+*.lance/
+*.csv
+*.json
+!tests/fixtures/*.json
+!.env.example
+exports/
+parsed/
+
+# DB
+*.db
+*.sqlite
+*.sqlite3
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Virtual envs
+.venv/
+venv/
+env/
+
+# uv
+uv.lock.bak
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Test / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Logs
+*.log
+logs/
