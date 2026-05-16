@@ -137,3 +137,9 @@ Python 3.12 · `uv` · `aiogram 3` · OpenAI API · LanceDB · SQLite/SQLModel �
 ## License
 
 MIT. See [`LICENSE`](LICENSE).
+
+---
+
+## Note on CI
+
+The CI workflow template lives at [`docs/ci-template.yml`](docs/ci-template.yml). To activate it, the repo owner needs to grant the `workflow` scope to their GitHub token (`gh auth refresh -s workflow`), then move the file to `.github/workflows/ci.yml`.
