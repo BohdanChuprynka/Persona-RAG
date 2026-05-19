@@ -1,20 +1,40 @@
 [project]
 name = "persona-rag"
-version = "0.0.1"
-description = "Telegram bot that replies as Bohdan, grounded in past chats via retrieval."
+version = "0.0.2"
+description = "LangGraph-orchestrated retrieval-augmented Telegram persona, grounded in past chats."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    # Bot
     "aiogram>=3.4",
+
+    # LLM + orchestration
     "openai>=1.40",
-    "lancedb>=0.10",
-    "pyarrow>=15",
-    "sqlmodel>=0.0.22",
-    "pydantic-settings>=2.4",
-    "structlog>=24.1",
-    "python-dotenv>=1.0",
-    "tenacity>=8.5",
+    "langgraph>=0.2",
+    "langchain-openai>=0.2",
+    "langsmith>=0.1.140",
     "tiktoken>=0.7",
+
+    # Retrieval
+    "qdrant-client>=1.11",
+    "rank-bm25>=0.2.2",
+
+    # State
+    "sqlmodel>=0.0.22",
+
+    # Config
+    "pydantic-settings>=2.4",
+    "python-dotenv>=1.0",
+
+    # Resilience + logging
+    "structlog>=24.1",
+    "tenacity>=8.5",
+
+    # MLOps
+    "mlflow>=2.16",
+
+    # Demo UI
+    "streamlit>=1.39",
 ]
 
 [project.optional-dependencies]
@@ -23,6 +43,7 @@ dev = [
     "pytest-asyncio>=0.23",
     "ruff>=0.6",
     "mypy>=1.11",
+    "pre-commit>=3.7",
 ]
 
 [build-system]
@@ -38,6 +59,13 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unreachable = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
