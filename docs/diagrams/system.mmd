@@ -2,32 +2,46 @@ flowchart LR
     subgraph Ingest[Ingest - run once]
         A[Telegram + Instagram<br/>exports] --> B[Parse + PII redact]
         B --> C[Conversation builder]
-        C --> D[Embedder<br/>OpenAI text-embedding-3-small]
-        D --> E[(LanceDB<br/>vectors)]
+        C --> D[OpenAI embedder<br/>text-embedding-3-small]
+        D --> E[(Qdrant<br/>persona_turns)]
+        C --> BM[BM25 index<br/>rank-bm25]
         C --> F[(SQLite<br/>persona.db)]
+        C --> SA[(style_anchors.json)]
     end
 
     subgraph Runtime[Runtime - per message]
         G[Friend message] --> H[aiogram bot]
-        H --> I{Auth check}
-        I -- no --> J[Auth flow]
-        I -- yes --> K[Retriever]
-        K --> E
-        K --> L[Prompt builder]
-        L --> M[OpenAI gpt-4o-mini]
-        L --> N[(Per-user memory)]
-        M --> O[Guardrails]
-        O --> P[Telegram reply]
+        H --> LG[LangGraph state machine]
+        LG --> E
+        LG --> BM
+        LG --> L[OpenAI gpt-4o-mini<br/>+ prompt caching]
+        LG --> N[(Per-user memory)]
+        LG --> O[Telegram reply]
+        LG -.shadow log.-> SL[(shadow_log.jsonl)]
+        LG -.traces.-> LS[LangSmith]
     end
 
     subgraph Admin[Admin]
-        Q[Admin commands<br/>users / revoke / pause / memory] --> H
-        J --> R[DM admin:<br/>Approve / Block]
+        Q[Admin commands] --> H
+        LG -.auth request.-> R[DM admin:<br/>Approve / Block]
         R --> Q
     end
 
-    F -.session log.-> N
+    subgraph Demo[Demo surface]
+        ST[Streamlit UI<br/>localhost:8501] --> LG
+    end
+
+    subgraph Eval[Eval - manual run]
+        EV[scripts/eval_persona.py] --> E
+        EV --> SL
+        EV --> ML[(MLflow<br/>localhost:5000)]
+    end
 
     style Ingest fill:#f0fdf4
     style Runtime fill:#eff6ff
     style Admin fill:#fef3c7
+    style Demo fill:#fae8ff
+    style Eval fill:#fff7ed
+    style L fill:#dbeafe
+    style LS fill:#fef3c7
+    style ML fill:#fff7ed

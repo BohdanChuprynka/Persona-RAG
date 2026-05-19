@@ -1,129 +1,121 @@
 # Prompt Design
 
-How the system prompt and few-shot examples are assembled at runtime.
+How the system prompt + few-shot examples are assembled, and how prompt-caching is engineered for cost.
 
-## Anatomy
+## Two-part layout (cacheable prefix + dynamic suffix)
 
-A single chat completion call looks like:
+OpenAI auto-caches identical prompt **prefixes** ≥1024 tokens on `gpt-4o-mini`. Cached input tokens cost ~50% less. Persona-RAG splits the prompt into a stable prefix (shared across turns in a session) and a variable suffix (changes per message).
 
 ```
-[ system ]
-  You are {PERSONA_NAME}. {PERSONA_DESCRIPTION}
-
-  ## Style anchors (from past replies)
-  - Avg msg length: {n} chars
-  - Emoji usage: {rate}/msg
-  - Primary language: {lang}
-  - Common phrases: {top-K bigrams from corpus}
-
-  ## What you remember about this user
-  {per-user memory summary, ≤300 tokens}
-
-  ## How to reply
-  - Stay in character — you ARE this person, not their assistant.
-  - Match the register of your past replies below.
-  - Refuse: financial info, addresses, friends' personal data, anything tagged <REDACTED>.
-  - If the user asks a question you genuinely don't know, say so in your voice — don't invent.
-
-[ user ]   (one per few-shot pair, formatted as conversation history)
-  {incoming_context_1[-1]}
-
-[ assistant ]
-  {your_reply_1}
-
-  ... × TOP_K few-shot pairs ...
-
-[ user ]   (current session window)
-  {last K turns of this user's session, alternating user/assistant roles}
-
-[ user ]
-  {friend's new message}
+┌────────────────── CACHED PREFIX (≥1024 tokens, stable per session) ──────────────────┐
+│ system: persona identity + style anchors + per-user memory + behavior rules          │
+└──────────────────────────────────────────────────────────────────────────────────────┘
+┌────────────────── DYNAMIC SUFFIX (changes every turn) ───────────────────────────────┐
+│ user/assistant alternation: top-K retrieved few-shot pairs                            │
+│ user/assistant alternation: current session window                                    │
+│ user: new incoming message                                                            │
+└──────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-Sent as a standard OpenAI `messages=[...]` array with `role` set per block.
+OpenAI matches the prefix by exact token prefix. As long as the system message is identical and the message order doesn't change, the cache hits.
 
-## Building each piece
+**Implication:** put few-shot pairs and session turns in the *suffix* (user/assistant messages), not in the system prompt. Otherwise every retrieval change busts the cache.
 
-### System prompt
+## System prompt template
 
-Static template + dynamic substitution. Template lives at `persona_rag/generate/prompt.py`:
+`persona_rag/generate/prompt.py`:
 
 ```python
 SYSTEM_TEMPLATE = """\
 You are {persona_name}. {persona_description}
 
 ## Style anchors (from your past replies)
-{style_anchors}
+- Average message length: {avg_len_chars} characters
+- Emoji rate: {emoji_rate_per_char:.3f} per character
+- Primary language: {primary_language}
+- Common phrases: {top_bigrams_joined}
 
 ## What you remember about this user
-{user_memory}
+{user_memory_summary}
 
 ## How to reply
-- Stay in character — you ARE this person, not their assistant.
-- Match the register of your past replies shown below.
+- You ARE {persona_name}, not their assistant. Stay in character.
+- Match the register of the example past replies you'll see below.
 - Refuse: financial info, addresses, friends' personal data, anything tagged <REDACTED>.
-- If asked something you genuinely don't know, say so in your voice. Don't invent.
+- If asked something you don't actually know, say so in your voice. Don't invent.
 - Keep replies natural-length for chat. Don't write essays.
-- Reply in {language} unless the user has clearly switched to another language.
+- Reply in {primary_language} unless the user has clearly switched.
 """
 ```
 
-Style anchors are computed once at ingest time and cached:
+Style anchors come from `data/style_anchors.json` (computed once at ingest). `user_memory_summary` is loaded per-user from SQLite. Both are stable within a session → cacheable.
 
-- Avg `your_reply_len_chars`
-- Emoji rate (emojis per message)
-- Most common bigrams / trigrams (top 10)
-- Primary language by message count
+## Few-shot retrieval
 
-Persona description is user-supplied via `PERSONA_DESCRIPTION` env var. Example for the worked Bohdan case (kept out of the public template; lives only in admin's `.env`):
-
-```
-PERSONA_DESCRIPTION="Data scientist, mid-20s, Ukrainian. Direct, slightly sarcastic, code-switches between Ukrainian and English depending on topic. Loves gym, fitness, AI/ML, startup ideas. Replies short and punchy."
-```
-
-### Few-shot pairs
-
-From `retrieval/retriever.py`:
+`persona_rag/retrieval/retriever.py`:
 
 ```python
-def retrieve_few_shot(query: str, *, top_k: int, language: str) -> list[PersonaTurn]:
+def retrieve_hybrid(
+    query: str,
+    *,
+    user_language: str,
+    top_k: int = TOP_K,
+    alpha: float = HYBRID_DENSE_ALPHA,
+) -> list[PersonaTurn]:
     """
-    1. Embed query
-    2. LanceDB top_k * 2 by cosine
-    3. Filter to matching language
-    4. Rerank with recency: score * exp(-age_days / RECENCY_HALF_LIFE_DAYS)
-    5. Return top_k
+    1. Embed query with text-embedding-3-small
+    2. Qdrant dense top_k * 4 with filter eval_split=False
+    3. BM25 top_k * 4 over the same corpus
+    4. Min-max normalize both score sets
+    5. Fuse: alpha * dense_norm + (1 - alpha) * bm25_norm
+    6. Optional language filter: prefer user_language; fall back if too few
+    7. Recency rerank: final_score *= exp(-age_days / RECENCY_HALF_LIFE_DAYS)
+    8. Return top_k
     """
 ```
 
-Rendered into messages as alternating user/assistant turns. The model sees them as actual prior conversation, not as instructions — which is exactly the cognitive trick that makes few-shot persona transfer work in 2026-era chat models.
+Rendered into messages as alternating user/assistant turns:
 
-### Current session window
+```python
+messages = [
+    {"role": "system", "content": CACHED_PREFIX},
+    # few-shot pairs (assistant=persona reply, user=what they replied to)
+    {"role": "user", "content": turn1.incoming_context[-1]},
+    {"role": "assistant", "content": turn1.your_reply},
+    ...
+    {"role": "user", "content": turn8.incoming_context[-1]},
+    {"role": "assistant", "content": turn8.your_reply},
+    # current session window
+    {"role": "user", "content": session[-10].text},
+    {"role": "assistant", "content": session[-9].text},
+    ...
+    # new incoming
+    {"role": "user", "content": friend_msg},
+]
+```
 
-Last `CURRENT_SESSION_WINDOW` turns (default 10) of this user's current session, role-mapped:
+The model sees this as actual prior conversation history rather than instructions — which is the cognitive trick that makes few-shot persona transfer work in 2026-era chat models.
 
-- Friend's messages → `role: "user"`
-- Persona's replies → `role: "assistant"`
+## Per-user memory update
 
-Loaded from a short-lived in-memory session store keyed by `(user_id, session_id)`. Session resets after `SESSION_TIMEOUT_MINUTES` silence.
-
-### Current message
-
-The friend's just-arrived message as the final `role: "user"` turn.
-
-## Per-user memory
-
-After every session ends (silence > timeout), a background job runs:
+After every session ends (silence > `SESSION_TIMEOUT_MINUTES`), an async background node runs:
 
 ```python
 async def update_user_memory(user_id: int, session_log: list[Message]) -> None:
-    """
-    Ask LLM to update the user_memory.summary based on the just-ended session.
-    Strict character limit on output to keep prompts cheap.
-    """
+    prompt = MEMORY_UPDATE_PROMPT.format(
+        persona_name=settings.PERSONA_NAME,
+        session_log=format_session(session_log),
+        existing_summary=load_memory(user_id) or "(none yet)",
+    )
+    new_summary = await openai.chat.completions.create(
+        model=settings.OPENAI_CHAT_MODEL,
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=350,
+    )
+    save_memory(user_id, new_summary.choices[0].message.content)
 ```
 
-Prompt:
+Prompt template:
 
 ```
 Below is a recent conversation between {persona_name} and a user.
@@ -133,7 +125,7 @@ Conversation:
 {session_log}
 
 Current memory:
-{existing_summary or "(none yet)"}
+{existing_summary}
 
 Update the memory in ≤300 tokens. Keep:
 - Their name / how they prefer to be addressed
@@ -148,46 +140,50 @@ Drop:
 Output ONLY the new summary text. No preamble.
 ```
 
-The output replaces the previous `UserMemory.summary`. Cost is small: ~$0.0001 per update with `gpt-4o-mini`.
+The new summary replaces the previous. Cost: ~$0.0001 per update with `gpt-4o-mini`.
 
 ## Guardrails (post-generation)
 
-Run in `generate/guardrails.py` after LLM returns, before sending to Telegram:
+Run in `generate/guardrails.py` after the LLM returns, before sending:
 
 | Check | Action |
 |---|---|
-| Reply contains `<REDACTED>` literal | Regenerate once with stronger instruction; fail-fast if still leaks |
-| Reply matches regex for raw phone/email/address | Strip and regenerate |
+| Reply contains `<REDACTED>` literal | Regenerate once; fail to fallback if still leaks |
+| Reply matches regex for raw phone/email/address | Strip + regenerate |
 | Reply > `MAX_REPLY_TOKENS * 1.5` | Truncate at last sentence boundary |
-| Reply empty / whitespace | Send fallback: "...". (Persona is silent sometimes.) |
-| Reply contains banned slur list | Block; log; alert admin |
+| Reply empty / whitespace | Send fallback: "..." (persona is silent sometimes) |
+| Reply contains banned slur list | Block; log; structlog `severity=alert` → admin |
 
 ## Token budget
 
-| Component | Typical tokens |
-|---|---|
-| System prompt | 400 |
-| Style anchors | 50 |
-| Per-user memory | 200 |
-| 8 few-shot pairs | 1600 |
-| 10 session turns | 600 |
-| Current msg | 50 |
-| **Input total** | **~2900** |
-| Reply (cap) | 300 |
-| **Round-trip** | **~3200** |
+| Component | Typical tokens | Cached? |
+|---|---|---|
+| System prompt (persona + anchors + memory + rules) | 1100 | ✅ Yes |
+| 8 few-shot pairs | 1600 | ❌ No (rotates per query) |
+| 10 session turns | 600 | ❌ No |
+| Current msg | 50 | ❌ No |
+| **Input total** | **~3350** | partial |
+| Reply (cap) | 300 | — |
 
-At `gpt-4o-mini` pricing (`$0.15/M input, $0.60/M output`): **~$0.0006/reply**.
+With cache hit on the 1100-token prefix (which dominates fixed cost since few-shot/session pairs vary):
 
-Even at 200 replies/day: ~$0.12/day, **<$4/month**.
+- Without cache: `3350 * $0.15/1M = $0.0005` input + `300 * $0.60/1M = $0.00018` output ≈ **$0.00068/reply**
+- With cache (50% off cached portion): `(1100 * 0.5 + 2250) * $0.15/1M + output ≈ $0.00043 + $0.00018 = $0.00061/reply` ≈ **10% total saving**
+
+Cache shines more on long persona prompts or longer sessions. Real-world saving usually 5–15% — modest but free.
+
+At 200 replies/day: ~$0.12/day, **<$4/month**.
 
 ## Tuning levers
 
 | Knob | Effect |
 |---|---|
 | `TOP_K` | More retrievals → better persona match, more cost |
-| `RECENCY_HALF_LIFE_DAYS` | Lower → bot reflects recent style drift, ignores old you |
-| `TEMPERATURE` | Higher → more creative, may break persona; lower → repetitive |
-| `CURRENT_SESSION_WINDOW` | Larger → better continuity in long sessions |
-| `OPENAI_CHAT_MODEL` | `gpt-4o-mini` → cost; `gpt-4o` → quality |
+| `HYBRID_DENSE_ALPHA` | 1.0 = dense only; 0.0 = BM25 only. Default 0.7 |
+| `RECENCY_HALF_LIFE_DAYS` | Lower → bot reflects recent style drift |
+| `TEMPERATURE` | Higher → more creative; lower → repetitive |
+| `CURRENT_SESSION_WINDOW` | Larger → better continuity, more tokens |
+| `OPENAI_CHAT_MODEL` | `gpt-4o-mini` (cost) vs `gpt-4o` (quality) |
+| `ENABLE_PROMPT_CACHING` | Toggle the cacheable-prefix layout |
 
-Start with defaults, A/B test before tuning. See [`EVAL.md`](EVAL.md).
+Each MLflow eval run logs these as params. See [`EVAL.md`](EVAL.md).

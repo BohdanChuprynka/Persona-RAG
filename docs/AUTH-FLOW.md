@@ -106,9 +106,14 @@ CREATE TABLE audit_log (
 );
 ```
 
-## aiogram FSM
+## aiogram FSM (admin side) + LangGraph branch (bot side)
 
-The admin approval flow is implemented as an aiogram FSM, scoped per pending user:
+Two concerns, two mechanisms:
+
+- **Admin's approval flow** uses an aiogram FSM (`AuthApproval` group with `waiting_for_decision`, `viewing_more` states). Lives entirely in the admin's chat with the bot. States persist in aiogram's default in-memory storage; SQLite's `users` table is the source of truth for restart recovery.
+- **Bot's per-message routing** is the `auth_check` node in the runtime LangGraph (see [`ARCHITECTURE.md`](ARCHITECTURE.md#subsystem-b--runtime-langgraph-state-machine)). It reads `users.state` for the sender and routes to one of: `retrieve_hybrid` (whitelisted), `auth_request_admin` (unknown), reply-with-pending (pending), silent-end (blocked).
+
+The LangGraph routing is stateless per message — every call re-reads SQLite. No graph checkpoint state needed for auth itself.
 
 ```python
 class AuthApproval(StatesGroup):
@@ -116,7 +121,7 @@ class AuthApproval(StatesGroup):
     viewing_more = State()
 ```
 
-States persist in `aiogram`'s default in-memory storage. If the bot restarts mid-approval, the pending record in SQLite is the source of truth — admin re-fires `/pending` to see open requests.
+If the bot restarts mid-approval, the pending record in SQLite is the source of truth — admin fires `/pending` to see open requests.
 
 ## Failure modes considered
 

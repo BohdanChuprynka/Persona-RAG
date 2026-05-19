@@ -1,6 +1,6 @@
 # Data Pipeline
 
-End-to-end ingest: chat exports → parsed turns → PII-redacted → embedded → stored.
+End-to-end ingest: chat exports → parsed turns → PII-redacted → embedded → stored in Qdrant + SQLite.
 
 ## Inputs
 
@@ -11,13 +11,16 @@ End-to-end ingest: chat exports → parsed turns → PII-redacted → embedded �
 
 Drop anywhere under `data/raw/`. Parsers auto-discover.
 
-## Output
+## Outputs
 
 ```
 data/
-├── persona.db        # SQLite: conversations, turns, users, memory
-└── vectors.lance/    # LanceDB: PersonaTurn embeddings
+├── persona.db                 # SQLite: conversations, turns, users, memory
+├── style_anchors.json         # cached stylometric features for system prompt
+└── shadow_log.jsonl           # populated only when SHADOW_MODE=true
 ```
+
+Plus Qdrant collection `persona_turns` running in a separate process (docker-compose service).
 
 ## Stages
 
@@ -28,9 +31,11 @@ flowchart LR
     C --> D[3. PII redact]
     D --> E[4. Group conversations]
     E --> F[5. Extract persona turns]
-    F --> G[6. Embed]
-    G --> H[(LanceDB)]
+    F --> G[6a. Embed dense]
+    F --> BM[6b. Index BM25]
+    G --> H[(Qdrant)]
     F --> I[(SQLite)]
+    F --> SA[7. Compute style anchors]
 ```
 
 ### 1. Parse
@@ -55,10 +60,10 @@ class RawMessage:
 
 ### 2. Normalize
 
-- Hash `chat_id`, `sender_id` with `BLAKE2b(key=PERSONA_NAME)` so the SQLite DB doesn't store recipient identities in plaintext.
+- Hash `chat_id`, `sender_id` with `BLAKE2b(key=PERSONA_NAME)` so SQLite doesn't store recipient identities in plaintext.
 - Drop empty texts, edits, media-only messages.
-- Detect language with `langdetect` per message; store as ISO 639-1.
-- Drop group chats unless `INCLUDE_GROUP_CHATS=true`. Persona signal in group chats is much noisier — you reply less, with shorter messages, often to a moving target.
+- Detect language with `langdetect`; store as ISO 639-1.
+- Drop group chats unless `INCLUDE_GROUP_CHATS=true`.
 
 ### 3. PII redact
 
@@ -66,35 +71,23 @@ Regex + word-list based. Configurable in `.env`:
 
 ```
 PII_PATTERNS=phone,email,address,iban,credit_card
-PII_NAMES=alice,bob,...           # comma-separated personal names to redact
+PII_NAMES=alice,bob,...
 PII_REPLACE_TOKEN=<REDACTED>
+STRIP_URLS=false
 ```
 
-Rules applied in order:
+Rules applied in order: phones (E.164 + local), emails, URLs (optional), IBAN, credit-card-shaped digits, custom name list (case-insensitive whole-word). Not redacted: emojis, casing, punctuation quirks, slang — the persona signal.
 
-1. Phone numbers (E.164 + common local formats)
-2. Email addresses
-3. URLs (kept by default — they're identity markers; toggle with `STRIP_URLS=true`)
-4. IBAN / credit-card-shaped digits
-5. Custom name list (case-insensitive whole-word)
-
-**Not redacted:** emojis, capitalization, punctuation quirks, slang, code-switching. These are the persona signal.
-
-Implementation: `persona_rag/ingest/pii.py`. Output stored both in SQLite (`conversations.text_redacted`) and the original kept locally only in `data/raw/`.
+Output stored both in SQLite (`messages.text`) and an in-memory copy used downstream. Original raw text never leaves `data/raw/`.
 
 ### 4. Group conversations
 
 Within a single `chat_id`:
 
 - Sort by `timestamp` ascending
-- Collapse consecutive same-sender messages within `MESSAGE_BURST_SECONDS` (default 300) into one message, joined with `\n`
-- Cut into "sessions" wherever the inter-message gap exceeds `SESSION_BREAK_HOURS` (default 6)
+- Collapse consecutive same-sender messages within `MESSAGE_BURST_SECONDS` (default 300)
+- Cut into sessions wherever the gap exceeds `SESSION_BREAK_HOURS` (default 6)
 - Drop sessions shorter than `MIN_SESSION_TURNS` (default 4)
-
-This avoids two failure modes from the predecessor:
-
-- **No more forced alternation.** The old code treated every odd row as a question and every even row as an answer, dropping unmatched messages. Here we keep the natural turn structure.
-- **No back-translation augmentation.** That destroyed exactly the style signal we want to preserve.
 
 ### 5. Extract persona turns
 
@@ -111,51 +104,77 @@ class PersonaTurn:
     timestamp: datetime
     language: str
     your_reply_len_chars: int
-    your_reply_emoji_count: int      # cheap stylometric feature
+    your_reply_emoji_count: int
+    eval_split: bool                 # last 10% by time → eval=true, never retrieved
 ```
 
-A "your reply" event = a message where `sender_id == ADMIN_TELEGRAM_ID` (the persona owner is, by definition, the bot's admin).
+A "your reply" event = a message where `sender_id == ADMIN_TELEGRAM_ID`.
 
-`incoming_context` is the chronological window of the last `CONTEXT_TURNS` messages (mix of sender), terminated when crossing a session boundary.
+**Time-based eval split:** last 10% by `timestamp` go into `eval_split=true` and are excluded from retrieval. They are the held-out ground truth for `EVAL.md` metrics.
 
-### 6. Embed + store
+### 6a. Embed (dense)
 
-- Batch-embed `your_reply` (not the context — we retrieve on what the persona said) with `text-embedding-3-small`.
-- Batch size 128. Use OpenAI's batch API for cost if dataset > 100k turns.
-- Write `(PersonaTurn, embedding)` rows into LanceDB.
-- Write full `PersonaTurn` into SQLite as source of truth.
+- Batch-embed `your_reply` with `text-embedding-3-small`. Batch size 128.
+- Use OpenAI batch API for cost if dataset > 100k turns.
+- Write each `(PersonaTurn payload, vector)` row to Qdrant collection `persona_turns`.
 
-Why embed `your_reply` instead of `incoming_context`? Because at inference we want retrieval over "times I said something like this," not "times someone asked me something like this." The latter retrieves by topic; the former retrieves by *response register*, which is closer to what we want for style transfer. (Alternative: embed both and concatenate vectors — tunable in `index/embedder.py` if quality demands it.)
+Why embed `your_reply` instead of `incoming_context`? Retrieval target is "times I said something like this," not "times someone asked me something like this." The latter retrieves by topic; the former by response register. The former is closer to style transfer.
 
----
+### 6b. Index (BM25 lexical)
 
-## Reproducibility
+- Build `rank-bm25.BM25Okapi` over the same `your_reply` corpus, tokenized with `language`-aware whitespace + punctuation split.
+- Persist to `data/bm25.pkl`. Rebuilt only on full reindex.
+- Loaded into memory at bot startup.
 
-The pipeline is idempotent. Running `scripts/ingest.py` twice on the same input:
+At retrieval time: dense top-2K from Qdrant + BM25 top-2K, fused with `score = HYBRID_DENSE_ALPHA * dense_norm + (1 - HYBRID_DENSE_ALPHA) * bm25_norm`. Default `HYBRID_DENSE_ALPHA=0.7`.
 
-- Detects identical raw files by content hash and skips parse
-- Re-runs PII redaction (cheap — schema may have evolved)
-- Re-embeds only new turns (deduped by `PersonaTurn.id`)
+### 7. Compute style anchors
 
-To force a clean rebuild: `scripts/reindex.py --wipe`.
+One-shot pass over the full `your_reply` corpus:
 
----
+```json
+{
+  "avg_len_chars": 47,
+  "median_len_chars": 28,
+  "emoji_rate_per_char": 0.012,
+  "lang_distribution": {"uk": 0.62, "en": 0.31, "ru": 0.07},
+  "top_bigrams": ["ok cool", "yeah no", ...],
+  "n_turns": 14823
+}
+```
 
-## Cost (OpenAI embeddings)
+Written to `data/style_anchors.json`. Loaded into system prompt at runtime. Static between ingests — part of the cacheable prefix.
 
-`text-embedding-3-small`: $0.02 per 1M tokens.
+## Qdrant collection schema
 
-| Turns | Avg tokens/turn | Total tokens | Cost |
-|---|---|---|---|
-| 1,000 | 30 | 30k | $0.0006 |
-| 10,000 | 30 | 300k | $0.006 |
-| 100,000 | 30 | 3M | $0.06 |
+```python
+qdrant_client.create_collection(
+    collection_name="persona_turns",
+    vectors_config=VectorParams(size=1536, distance=Distance.COSINE),
+)
+```
 
-Negligible. Inference token cost dominates the budget.
+Payload:
 
----
+```python
+{
+    "id": "uuid",
+    "your_reply": "str",
+    "incoming_context": ["str", ...],
+    "channel": "telegram" | "instagram",
+    "chat_id_hash": "str",
+    "recipient_id_hash": "str",
+    "timestamp": "iso8601",
+    "language": "uk",
+    "your_reply_len_chars": 47,
+    "your_reply_emoji_count": 2,
+    "eval_split": false,
+}
+```
 
-## Schema reference (SQLite, SQLModel)
+Payload indices: `language` (keyword), `eval_split` (bool), `timestamp` (datetime). Used for filtered retrieval (e.g., same-language, exclude-eval-split).
+
+## SQLite schema (SQLModel)
 
 ```sql
 CREATE TABLE conversations (
@@ -178,17 +197,40 @@ CREATE TABLE messages (
 );
 
 CREATE TABLE persona_turns (
-    id TEXT PRIMARY KEY,           -- uuid
+    id TEXT PRIMARY KEY,           -- uuid; matches Qdrant point id
     your_reply TEXT NOT NULL,
-    incoming_context_json TEXT NOT NULL,  -- JSON array
+    incoming_context_json TEXT NOT NULL,
     channel TEXT NOT NULL,
     chat_id_hash TEXT NOT NULL,
     recipient_id_hash TEXT NOT NULL,
     timestamp DATETIME NOT NULL,
     language TEXT NOT NULL,
     your_reply_len_chars INTEGER,
-    your_reply_emoji_count INTEGER
+    your_reply_emoji_count INTEGER,
+    eval_split BOOLEAN NOT NULL DEFAULT 0
 );
 ```
 
-LanceDB columns mirror `persona_turns` plus a `vector` column (1536-d float32 for `text-embedding-3-small`).
+SQLite is the source of truth. Qdrant is the index. If they ever diverge: `scripts/reindex.py --wipe` rebuilds Qdrant from SQLite.
+
+## Reproducibility
+
+The pipeline is idempotent. Running `scripts/ingest.py` twice on the same input:
+
+- Detects identical raw files by content hash and skips parse
+- Re-runs PII redaction (cheap — schema may have evolved)
+- Re-embeds only new turns (deduped by `PersonaTurn.id`)
+
+To force a clean rebuild: `scripts/reindex.py --wipe`.
+
+## Cost (OpenAI embeddings)
+
+`text-embedding-3-small`: $0.02 per 1M tokens.
+
+| Turns | Avg tokens/turn | Total tokens | Cost |
+|---|---|---|---|
+| 1,000 | 30 | 30k | $0.0006 |
+| 10,000 | 30 | 300k | $0.006 |
+| 100,000 | 30 | 3M | $0.06 |
+
+Negligible. Inference token cost dominates the budget.

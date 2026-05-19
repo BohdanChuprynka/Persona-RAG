@@ -1,25 +1,39 @@
 flowchart TD
-    A[Friend sends Telegram message] --> B[aiogram message handler]
-    B --> C{From admin?}
-    C -- yes --> Z[Admin command router]
-    C -- no --> D{User state?}
+    A[Friend Telegram message] --> B[aiogram handler]
+    B --> LG[LangGraph.invoke]
 
-    D -- unknown --> E[Create pending record<br/>see AUTH-FLOW.md]
-    D -- pending --> F[Reply: still awaiting approval]
-    D -- blocked --> G[Silent ignore]
-    D -- whitelisted --> H[Load current session<br/>last K turns]
+    subgraph Graph[LangGraph state machine]
+        AC[auth_check] --> Branch{user state}
+        Branch -- whitelisted --> R[retrieve_hybrid<br/>Qdrant + BM25]
+        Branch -- unknown --> AR[auth_request_admin]
+        Branch -- pending --> PR[reply_awaiting]
+        Branch -- blocked --> SE([silent])
 
-    H --> I[Embed query:<br/>friend_msg + recent context]
-    I --> J[LanceDB top-K<br/>by cosine + recency rerank]
-    J --> K[Load per-user memory summary]
-    K --> L[Build prompt<br/>system + few-shot + session + msg]
-    L --> M[OpenAI Chat Completions<br/>gpt-4o-mini]
-    M --> N[Guardrails<br/>PII leak, length, refuse-list]
-    N --> O[Send Telegram reply]
-    O --> P[Append turn to session log]
-    P --> Q{Session timeout<br/>passed?}
-    Q -- yes --> R[Background: update<br/>user memory summary]
+        R --> RR[recency_rerank]
+        RR --> M[load_user_memory]
+        M --> S[load_session]
+        S --> BP[build_prompt<br/>cacheable prefix + dynamic suffix]
+        BP --> G[openai_chat<br/>gpt-4o-mini]
+        G --> GR[guardrails]
+        GR --> SF{shadow?}
+        SF -- yes --> SL[append shadow_log]
+        SF -- no --> SD[send_reply]
+        SD --> AT[append_session_log]
+        AT --> CT{session timeout?}
+        CT -- yes --> UM[update_user_memory<br/>async]
+        CT -- no --> EE([end])
+        UM --> EE
+        SL --> EE
+        AR --> EE
+        PR --> EE
+        SE --> EE
+    end
 
-    style E fill:#fef3c7
-    style M fill:#dbeafe
-    style N fill:#fee2e2
+    LG --> O[Send Telegram reply]
+    LG -.trace.-> LSM[LangSmith]
+
+    style G fill:#dbeafe
+    style GR fill:#fee2e2
+    style SL fill:#e0e7ff
+    style R fill:#dcfce7
+    style UM fill:#fef3c7

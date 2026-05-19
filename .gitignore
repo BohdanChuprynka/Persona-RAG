@@ -5,7 +5,6 @@
 
 # Data — never commit personal chats or vectors
 data/
-*.lance/
 *.csv
 *.json
 !tests/fixtures/*.json
@@ -13,10 +12,17 @@ data/
 exports/
 parsed/
 
+# MLflow local backend
+mlruns/
+mlartifacts/
+
 # DB
 *.db
 *.sqlite
 *.sqlite3
+
+# BM25 pickle
+bm25.pkl
 
 # Python
 __pycache__/
@@ -53,3 +59,7 @@ htmlcov/
 # Logs
 *.log
 logs/
+
+# Docker volumes (if mounted into repo)
+qdrant_storage/
+mlflow_data/

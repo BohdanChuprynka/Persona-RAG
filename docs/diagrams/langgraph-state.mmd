@@ -1,0 +1,35 @@
+flowchart TD
+    Start([incoming message]) --> AuthCheck{auth_check}
+
+    AuthCheck -- whitelisted --> RetrieveHybrid[retrieve_hybrid<br/>Qdrant dense + BM25]
+    AuthCheck -- unknown --> AuthRequest[auth_request_admin<br/>buffer message]
+    AuthCheck -- pending --> PendingReply[reply_awaiting]
+    AuthCheck -- blocked --> EndSilent([silent end])
+
+    RetrieveHybrid --> Rerank[recency_decay_rerank]
+    Rerank --> LoadMem[load_user_memory]
+    LoadMem --> LoadSession[load_current_session]
+    LoadSession --> BuildPrompt[build_prompt<br/>cacheable prefix]
+    BuildPrompt --> Generate[openai_chat<br/>gpt-4o-mini]
+    Generate --> Guard[guardrails<br/>PII / length / refuse-list]
+
+    Guard --> ShadowFork{shadow_mode?}
+    ShadowFork -- true --> ShadowLog[append shadow_log.jsonl<br/>NO send]
+    ShadowFork -- false --> Send[send_telegram_reply]
+
+    Send --> AppendTurn[append session log]
+    ShadowLog --> EndShadow([end])
+
+    AppendTurn --> CheckTimeout{session timeout?}
+    CheckTimeout -- yes --> UpdateMem[update_user_memory<br/>async background]
+    CheckTimeout -- no --> EndNormal([end])
+    UpdateMem --> EndNormal
+
+    AuthRequest --> EndWait([wait for admin])
+    PendingReply --> EndWait
+
+    style Generate fill:#dbeafe
+    style Guard fill:#fee2e2
+    style ShadowLog fill:#e0e7ff
+    style RetrieveHybrid fill:#dcfce7
+    style UpdateMem fill:#fef3c7
