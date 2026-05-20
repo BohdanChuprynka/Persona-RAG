@@ -14,5 +14,6 @@ repos:
           - pydantic-settings
           - sqlmodel
           - types-python-dateutil
+          - structlog
         args: [--strict, persona_rag]
         pass_filenames: false
