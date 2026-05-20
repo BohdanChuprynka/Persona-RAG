@@ -17,5 +17,6 @@ repos:
           - structlog
           - openai
           - tenacity
+          - qdrant-client
         args: [--strict, persona_rag]
         pass_filenames: false
