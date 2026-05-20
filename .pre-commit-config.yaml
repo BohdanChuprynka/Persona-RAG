@@ -18,5 +18,6 @@ repos:
           - openai
           - tenacity
           - qdrant-client
+          - rank-bm25
         args: [--strict, persona_rag]
         pass_filenames: false
