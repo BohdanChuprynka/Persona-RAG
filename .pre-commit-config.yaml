@@ -22,5 +22,6 @@ repos:
           - aiogram
           - langgraph
           - langchain-core
+          - mlflow
         args: [--strict, persona_rag]
         pass_filenames: false
