@@ -20,5 +20,7 @@ repos:
           - qdrant-client
           - rank-bm25
           - aiogram
+          - langgraph
+          - langchain-core
         args: [--strict, persona_rag]
         pass_filenames: false
