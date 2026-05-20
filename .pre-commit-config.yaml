@@ -15,5 +15,7 @@ repos:
           - sqlmodel
           - types-python-dateutil
           - structlog
+          - openai
+          - tenacity
         args: [--strict, persona_rag]
         pass_filenames: false
