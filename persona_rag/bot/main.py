@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
@@ -15,6 +16,11 @@ log = get_logger()
 async def amain() -> None:
     configure_logging()
     s = get_settings()
+    if s.LANGCHAIN_API_KEY:
+        os.environ["LANGCHAIN_TRACING_V2"] = str(s.LANGCHAIN_TRACING_V2).lower()
+        os.environ["LANGCHAIN_API_KEY"] = s.LANGCHAIN_API_KEY
+        os.environ["LANGCHAIN_PROJECT"] = s.LANGCHAIN_PROJECT
+        log.info("langsmith_enabled", project=s.LANGCHAIN_PROJECT)
     bot = Bot(
         token=s.TELEGRAM_BOT_TOKEN,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
