@@ -1,0 +1,9 @@
+{
+  "participants": [{"name": "Bohdan"}, {"name": "Friend B"}],
+  "messages": [
+    {"sender_name": "Friend B", "timestamp_ms": 1735689600000, "content": "sup"},
+    {"sender_name": "Bohdan", "timestamp_ms": 1735689660000, "content": "all good Ã©"}
+  ],
+  "title": "Friend B",
+  "thread_path": "inbox/friend_b_xxxxx"
+}

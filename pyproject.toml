@@ -7,34 +7,28 @@ requires-python = ">=3.12"
 dependencies = [
     # Bot
     "aiogram>=3.4",
-
     # LLM + orchestration
     "openai>=1.40",
     "langgraph>=0.2",
     "langchain-openai>=0.2",
     "langsmith>=0.1.140",
     "tiktoken>=0.7",
-
     # Retrieval
     "qdrant-client>=1.11",
     "rank-bm25>=0.2.2",
-
     # State
     "sqlmodel>=0.0.22",
-
     # Config
     "pydantic-settings>=2.4",
     "python-dotenv>=1.0",
-
     # Resilience + logging
     "structlog>=24.1",
     "tenacity>=8.5",
-
     # MLOps
     "mlflow>=2.16",
-
     # Demo UI
     "streamlit>=1.39",
+    "langdetect>=1.0.9",
 ]
 
 [project.optional-dependencies]

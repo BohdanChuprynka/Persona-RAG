@@ -1,7 +1,10 @@
-.PHONY: install lint format type test ingest run streamlit eval up down logs mlflow-ui clean
+.PHONY: install hooks lint format type test ingest run streamlit eval up down logs mlflow-ui clean
 
 install:
 	uv sync --all-extras
+
+hooks:
+	uv run pre-commit install
 
 lint:
 	uv run ruff check persona_rag tests scripts streamlit_app

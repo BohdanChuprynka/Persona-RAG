@@ -1,0 +1,22 @@
+{
+  "chats": {
+    "list": [
+      {
+        "name": "Friend A",
+        "type": "personal_chat",
+        "id": 111,
+        "messages": [
+          {"id": 1, "type": "message", "date": "2025-01-01T10:00:00", "from": "Friend A", "from_id": "user111", "text": "hey"},
+          {"id": 2, "type": "message", "date": "2025-01-01T10:00:30", "from": "Bohdan", "from_id": "222", "text": "yo"},
+          {"id": 3, "type": "service", "date": "2025-01-01T10:01:00", "action": "phone_call"}
+        ]
+      },
+      {
+        "name": "Group X",
+        "type": "private_group",
+        "id": 222,
+        "messages": [{"id": 1, "type": "message", "date": "2025-01-02T11:00:00", "from": "X", "from_id": "userZZZ", "text": "g"}]
+      }
+    ]
+  }
+}
