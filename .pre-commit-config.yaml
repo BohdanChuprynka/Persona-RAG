@@ -19,5 +19,6 @@ repos:
           - tenacity
           - qdrant-client
           - rank-bm25
+          - aiogram
         args: [--strict, persona_rag]
         pass_filenames: false
