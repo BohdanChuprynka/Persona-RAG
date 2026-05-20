@@ -2,6 +2,15 @@ from persona_rag.config import Settings
 
 
 def test_settings_load_from_env(monkeypatch, tmp_path):
+    for key in [
+        "PERSONA_NAME",
+        "PERSONA_LANGUAGE",
+        "PERSONA_DESCRIPTION",
+        "TELEGRAM_BOT_TOKEN",
+        "ADMIN_TELEGRAM_ID",
+        "OPENAI_API_KEY",
+    ]:
+        monkeypatch.delenv(key, raising=False)
     env = tmp_path / ".env"
     env.write_text(
         "PERSONA_NAME=TestPerson\n"
