@@ -69,6 +69,13 @@ class Settings(BaseSettings):
     MAX_REPLY_TOKENS: int = 300
     TEMPERATURE: float = 0.8
     ENABLE_PROMPT_CACHING: bool = True
+    # Real chat behavior: split replies on \n and send each fragment as
+    # its own Telegram message, with a small human-like typing delay
+    # between them. Disable to keep everything in one bubble.
+    REPLY_SPLIT_NEWLINES: bool = True
+    REPLY_CHUNK_DELAY_BASE_MS: int = 300
+    REPLY_CHUNK_DELAY_PER_CHAR_MS: int = 20
+    REPLY_CHUNK_DELAY_MAX_MS: int = 1800
 
     # Conversation state
     CURRENT_SESSION_WINDOW: int = 10
