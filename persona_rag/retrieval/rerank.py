@@ -16,7 +16,10 @@ def recency_decay(
     now = datetime.now(UTC)
     reranked: list[RetrievedTurn] = []
     for item in items:
-        age = (now - item.turn.timestamp).days
+        ts = item.turn.timestamp
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=UTC)
+        age = (now - ts).days
         factor = math.exp(-math.log(2) * age / half)
         reranked.append(item.model_copy(update={"score": item.score * factor}))
     reranked.sort(key=lambda x: x.score, reverse=True)
