@@ -5,7 +5,7 @@ Three signals, three stores.
 | Concern | Tool | Where |
 |---|---|---|
 | LLM chain traces (per-message LangGraph runs) | LangSmith | https://smith.langchain.com |
-| Eval runs (per-script run, persona-match metrics) | MLflow | `localhost:5000` via docker-compose |
+| Eval runs (per-script run, persona-match metrics) | MLflow | `localhost:5001` via docker-compose |
 | Service logs (bot lifecycle, errors, business events) | structlog | stdout (JSON), redirected to file in prod |
 
 Each tool has one job. No overlap.
@@ -41,7 +41,7 @@ Each `make eval` run produces one parent run + child runs (one per metric — st
 
 Local backends:
 - File backend (default for solo dev): `MLFLOW_TRACKING_URI=file:./mlruns`
-- Server backend (via docker-compose): `MLFLOW_TRACKING_URI=http://localhost:5000`
+- Server backend (via docker-compose): `MLFLOW_TRACKING_URI=http://localhost:5001` (host port 5000 reserved by macOS AirPlay Receiver — container still listens on 5000 internally)
 
 Server mode is preferred when iterating on prompts — you can leave the UI open and refresh.
 

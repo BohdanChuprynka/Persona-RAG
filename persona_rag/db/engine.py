@@ -9,7 +9,8 @@ from persona_rag.config import get_settings
 
 
 def make_engine(path: str | Path | None = None) -> Engine:
-    target = path or get_settings().USER_DB_PATH
+    target = Path(path) if path else get_settings().USER_DB_PATH
+    target.parent.mkdir(parents=True, exist_ok=True)
     url = f"sqlite:///{target}"
     engine = create_engine(url, echo=False)
     SQLModel.metadata.create_all(engine)

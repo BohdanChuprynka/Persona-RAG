@@ -143,7 +143,7 @@ experiment: persona-rag-eval
 └── ...
 ```
 
-Compare runs side-by-side in the MLflow UI (`localhost:5000` via docker-compose). Filter by `prompt_version` or `model` to A/B prompt designs.
+Compare runs side-by-side in the MLflow UI (`localhost:5001` via docker-compose). Filter by `prompt_version` or `model` to A/B prompt designs.
 
 ## Reporting
 

@@ -1,10 +1,13 @@
-.PHONY: install hooks lint format type test ingest run streamlit eval up down logs mlflow-ui clean
+.PHONY: install hooks init-data lint format type test ingest run streamlit eval up down logs mlflow-ui clean
 
 install:
 	uv sync --all-extras
 
 hooks:
 	uv run pre-commit install
+
+init-data:
+	uv run python scripts/init_data.py
 
 lint:
 	uv run ruff check persona_rag tests scripts streamlit_app
@@ -41,8 +44,8 @@ logs:
 	docker-compose logs -f --tail=100
 
 mlflow-ui:
-	@echo "MLflow UI: http://localhost:5000"
-	@open http://localhost:5000 2>/dev/null || true
+	@echo "MLflow UI: http://localhost:5001"
+	@open http://localhost:5001 2>/dev/null || true
 
 clean:
 	rm -rf .pytest_cache .ruff_cache .mypy_cache build dist *.egg-info

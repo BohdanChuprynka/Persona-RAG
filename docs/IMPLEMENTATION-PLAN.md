@@ -3998,7 +3998,7 @@ if __name__ == "__main__":
 - [ ] **Step 2: Smoke test**
 
 Run: `make up && uv run python scripts/ingest.py --tg tests/fixtures/tg_export_small.json && make eval`
-Expected: MLflow run logged at `localhost:5000`. (May fail with ≤1 held-out turn from tiny fixture; that's OK — real run uses real export.)
+Expected: MLflow run logged at `localhost:5001` (host port 5000 reserved by macOS AirPlay Receiver). (May fail with ≤1 held-out turn from tiny fixture; that's OK — real run uses real export.)
 
 - [ ] **Step 3: Commit**
 

@@ -75,7 +75,7 @@ data/raw/
 docker-compose up -d qdrant mlflow
 ```
 
-Qdrant on `localhost:6333`. MLflow UI on `localhost:5000`.
+Qdrant on `localhost:6333`. MLflow UI on `localhost:5001` (host port 5000 reserved by macOS AirPlay Receiver — host-side mapping is `5001:5000` in `docker-compose.yml`).
 
 ### 5. Ingest (one-time)
 

@@ -4,7 +4,24 @@
 *.key
 
 # Data — never commit personal chats or vectors
-data/
+data/*
+!data/README.md
+!data/.gitkeep
+!data/raw/
+data/raw/*
+!data/raw/.gitkeep
+!data/raw/telegram/
+data/raw/telegram/*
+!data/raw/telegram/.gitkeep
+!data/raw/instagram/
+data/raw/instagram/*
+!data/raw/instagram/.gitkeep
+!data/processed/
+data/processed/*
+!data/processed/.gitkeep
+!data/eval/
+data/eval/*
+!data/eval/.gitkeep
 *.csv
 *.json
 !tests/fixtures/*.json
