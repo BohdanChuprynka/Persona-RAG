@@ -73,6 +73,10 @@ class Settings(BaseSettings):
     # Conversation state
     CURRENT_SESSION_WINDOW: int = 10
     SESSION_TIMEOUT_MINUTES: int = 30
+    # LLM-distill user memory every N completed turns (user+assistant pair).
+    # Set to 0 to disable (memory stays whatever it was). 4 is a sensible
+    # default — extra LLM call once every 4 messages, not every turn.
+    MEMORY_UPDATE_INTERVAL_TURNS: int = 4
 
     # Shadow
     SHADOW_MODE: bool = False

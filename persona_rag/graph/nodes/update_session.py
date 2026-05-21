@@ -32,4 +32,6 @@ def update_session(state: GraphState) -> GraphState:
         entry.messages = entry.messages[-window:]
 
     entry.last_seen = datetime.now(UTC)
+    # Mirror into state so downstream nodes (update_memory) see the latest turn.
+    state["session"] = list(entry.messages)
     return state

@@ -88,3 +88,18 @@ def test_update_session_skips_when_no_reply():
         {"user_id": uid, "chat_id": uid, "incoming": "hello", "reply": "", "session": []}
     )
     assert uid not in _SESSIONS
+
+
+def test_update_session_mirrors_into_state():
+    state: GraphState = {
+        "user_id": 77,
+        "chat_id": 77,
+        "incoming": "hi",
+        "reply": "hey",
+        "session": [],
+    }
+    out = update_session(state)
+    assert out["session"] == [
+        ChatMessage(role="user", content="hi"),
+        ChatMessage(role="assistant", content="hey"),
+    ]

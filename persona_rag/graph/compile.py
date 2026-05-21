@@ -14,6 +14,7 @@ from persona_rag.graph.nodes.openai_chat import openai_chat
 from persona_rag.graph.nodes.retrieve_hybrid import retrieve_hybrid
 from persona_rag.graph.nodes.send_reply import send_reply
 from persona_rag.graph.nodes.shadow_log import shadow_log
+from persona_rag.graph.nodes.update_memory import update_memory_node
 from persona_rag.graph.nodes.update_session import update_session
 from persona_rag.graph.state import GraphState
 from persona_rag.models import UserState
@@ -44,6 +45,7 @@ def build_graph() -> Any:
     g.add_node("send_reply", send_reply)
     g.add_node("shadow_log", shadow_log)
     g.add_node("update_session", update_session)
+    g.add_node("update_memory", update_memory_node)
 
     g.set_entry_point("auth_check")
     g.add_conditional_edges("auth_check", _route_after_auth)
@@ -55,5 +57,6 @@ def build_graph() -> Any:
     g.add_conditional_edges("guardrails", _route_after_guardrails)
     g.add_edge("send_reply", "update_session")
     g.add_edge("shadow_log", "update_session")
-    g.add_edge("update_session", END)
+    g.add_edge("update_session", "update_memory")
+    g.add_edge("update_memory", END)
     return g.compile()
