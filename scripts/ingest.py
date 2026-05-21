@@ -26,13 +26,32 @@ def main() -> None:
     p.add_argument(
         "--dry-run",
         action="store_true",
-        help="Skip embeddings (SQLite + BM25 still run)",
+        help="Skip embeddings (SQLite + BM25 still run, plus cost estimate)",
+    )
+    p.add_argument(
+        "--estimate-only",
+        action="store_true",
+        help="Parse + extract turns + print token/cost estimate. No DB write, no embeddings.",
+    )
+    p.add_argument(
+        "--max-messages",
+        type=int,
+        default=None,
+        help="Cap total raw messages parsed (for safe first runs on huge exports).",
     )
     args = p.parse_args()
 
     tg = args.tg if args.tg.exists() else None
     ig = args.ig if args.ig.exists() else None
-    asyncio.run(run_ingest(telegram_path=tg, ig_root=ig, dry_run_embeddings=args.dry_run))
+    asyncio.run(
+        run_ingest(
+            telegram_path=tg,
+            ig_root=ig,
+            dry_run_embeddings=args.dry_run,
+            estimate_only=args.estimate_only,
+            max_messages=args.max_messages,
+        )
+    )
 
 
 if __name__ == "__main__":

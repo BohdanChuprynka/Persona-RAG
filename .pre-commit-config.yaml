@@ -23,5 +23,6 @@ repos:
           - langgraph
           - langchain-core
           - mlflow
+          - tiktoken
         args: [--strict, persona_rag]
         pass_filenames: false
