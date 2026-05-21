@@ -1,4 +1,4 @@
-.PHONY: install hooks init-data lint format type test ingest run streamlit eval up down logs mlflow-ui clean
+.PHONY: install hooks init-data whitelist-admin lint format type test ingest run streamlit eval up down logs mlflow-ui clean
 
 install:
 	uv sync --all-extras
@@ -8,6 +8,9 @@ hooks:
 
 init-data:
 	uv run python scripts/init_data.py
+
+whitelist-admin:
+	uv run python scripts/whitelist_admin.py
 
 lint:
 	uv run ruff check persona_rag tests scripts streamlit_app
