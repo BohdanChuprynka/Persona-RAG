@@ -6,6 +6,7 @@ from aiogram import F, Router
 from aiogram.types import Message
 
 from persona_rag._logging import get_logger
+from persona_rag.bot import debug_trace
 from persona_rag.bot.auth import ensure_user
 from persona_rag.bot.handlers.onboarding import request_admin_approval
 from persona_rag.bot.rate_limit import TokenBucket
@@ -47,11 +48,19 @@ async def on_message(message: Message) -> None:
 
     attach_bot(message.bot)
     graph = _get_graph()
+    incoming = message.text or ""
     final = await graph.ainvoke(
         {
             "user_id": user.id,
             "chat_id": message.chat.id,
-            "incoming": message.text or "",
+            "incoming": incoming,
         }
+    )
+    debug_trace.record(
+        user.id,
+        incoming=incoming,
+        retrieved=final.get("retrieved", []),
+        prompt=final.get("prompt", []),
+        reply=final.get("reply", ""),
     )
     log.info("message_processed", user_id=user.id, reply_len=len(final.get("reply", "")))
