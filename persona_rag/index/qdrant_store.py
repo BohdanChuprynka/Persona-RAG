@@ -35,8 +35,17 @@ _Condition = (
 
 
 def make_client() -> QdrantClient:
+    """Build a Qdrant client.
+
+    Only forwards ``QDRANT_API_KEY`` over HTTPS. Sending an API key over an
+    insecure ``http://`` connection is meaningless (and triggers a warning),
+    so local docker-compose runs ignore any key that's been set.
+    """
     s = get_settings()
-    return QdrantClient(url=s.QDRANT_URL, api_key=s.QDRANT_API_KEY)
+    api_key = (
+        s.QDRANT_API_KEY if (s.QDRANT_API_KEY and s.QDRANT_URL.startswith("https://")) else None
+    )
+    return QdrantClient(url=s.QDRANT_URL, api_key=api_key)
 
 
 def ensure_collection(client: QdrantClient, name: str, *, vector_size: int = VECTOR_SIZE) -> None:
