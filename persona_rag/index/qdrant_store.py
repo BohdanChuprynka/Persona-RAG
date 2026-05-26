@@ -73,6 +73,24 @@ def upsert_turns(
         client.upsert(collection_name=collection, points=points)
 
 
+def ensure_insights_collection(
+    client: QdrantClient, name: str, *, vector_size: int = VECTOR_SIZE
+) -> None:
+    """Create the self_insights collection (idempotent). Mirrors ensure_collection."""
+    collections = {c.name for c in client.get_collections().collections}
+    if name in collections:
+        return
+    client.create_collection(
+        collection_name=name,
+        vectors_config=VectorParams(size=vector_size, distance=Distance.COSINE),
+    )
+    client.create_payload_index(name, field_name="category", field_schema=PayloadSchemaType.KEYWORD)
+    client.create_payload_index(name, field_name="source", field_schema=PayloadSchemaType.KEYWORD)
+    client.create_payload_index(
+        name, field_name="review_status", field_schema=PayloadSchemaType.KEYWORD
+    )
+
+
 def search_dense(
     client: QdrantClient,
     collection: str,
