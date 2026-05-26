@@ -99,3 +99,206 @@ async def test_persist_insights_embeds_only_active(tmp_path, monkeypatch):
     # Only "auto" got embedded + upserted
     mock_embed.assert_awaited_once()
     fake_client.upsert.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_persist_insights_preserves_user_verified_on_rerun(tmp_path, monkeypatch):
+    """Re-run with same canonical_subject must NOT overwrite user_verified rows."""
+    db_path = str(tmp_path / "p.db")
+    monkeypatch.setattr(
+        "persona_rag.insights.persistence.make_engine",
+        lambda: make_engine(db_path),
+    )
+
+    now = datetime.now(UTC)
+    # Seed: user has already verified an insight with id=ID_X
+    seed_id = (
+        "abc123def4567890"  # stable_id for some (cat, subj) — value doesn't matter for this test
+    )
+    with Session(make_engine(db_path)) as s:
+        s.add(
+            InsightRow(
+                id=seed_id,
+                category="bio",
+                subject="school",
+                text="user-corrected text",
+                confidence=1.0,
+                evidence_count=3,
+                earliest_date=now,
+                latest_date=now,
+                trajectory=None,
+                source_session_ids="[]",
+                source="user_verified",
+                review_status="approved",
+                edited_text="original text",
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        s.commit()
+
+    # Re-run produces a ConsolidatedInsight with the same id but different text/status
+    ci = ConsolidatedInsight(
+        id=seed_id,
+        category="bio",
+        canonical_subject="school",
+        text="freshly extracted text",
+        confidence=0.85,
+        evidence_count=5,
+        earliest_date=now,
+        latest_date=now,
+        trajectory=None,
+        source_session_ids=["s99"],
+    )
+    fake_client = MagicMock()
+    with patch(
+        "persona_rag.insights.persistence.embed_batch",
+        AsyncMock(return_value=[[0.0] * 1536]),
+    ):
+        await persist_insights(
+            [ci], statuses={seed_id: "auto"}, qdrant_client=fake_client, collection="self_insights"
+        )
+
+    with Session(make_engine(db_path)) as s:
+        row = s.get(InsightRow, seed_id)
+    assert row is not None
+    # Identity preserved
+    assert row.source == "user_verified"
+    assert row.review_status == "approved"
+    assert row.text == "user-corrected text"
+    assert row.confidence == 1.0
+    # Evidence freshness CAN be bumped
+    assert row.evidence_count == 5
+    # No Qdrant upsert — user's point shouldn't be churned
+    fake_client.upsert.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_persist_insights_preserves_rejected_on_rerun(tmp_path, monkeypatch):
+    """Re-run must NOT resurrect previously-rejected insights."""
+    db_path = str(tmp_path / "p.db")
+    monkeypatch.setattr(
+        "persona_rag.insights.persistence.make_engine",
+        lambda: make_engine(db_path),
+    )
+
+    now = datetime.now(UTC)
+    seed_id = "rejected-id-1234"
+    with Session(make_engine(db_path)) as s:
+        s.add(
+            InsightRow(
+                id=seed_id,
+                category="interest",
+                subject="cyberpunk",
+                text="plays cyberpunk",
+                confidence=0.6,
+                evidence_count=2,
+                earliest_date=now,
+                latest_date=now,
+                trajectory=None,
+                source_session_ids="[]",
+                source="chat",
+                review_status="rejected",
+                edited_text=None,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        s.commit()
+
+    ci = ConsolidatedInsight(
+        id=seed_id,
+        category="interest",
+        canonical_subject="cyberpunk",
+        text="plays cyberpunk again",
+        confidence=0.9,
+        evidence_count=7,
+        earliest_date=now,
+        latest_date=now,
+        trajectory=None,
+        source_session_ids=["s1", "s2"],
+    )
+    fake_client = MagicMock()
+    with patch(
+        "persona_rag.insights.persistence.embed_batch",
+        AsyncMock(return_value=[[0.0] * 1536]),
+    ):
+        await persist_insights(
+            [ci], statuses={seed_id: "auto"}, qdrant_client=fake_client, collection="self_insights"
+        )
+
+    with Session(make_engine(db_path)) as s:
+        row = s.get(InsightRow, seed_id)
+    assert row is not None
+    assert row.review_status == "rejected"
+    # Evidence freshness gets bumped (so user can see new mentions if they re-check)
+    assert row.evidence_count == 7
+    # No Qdrant upsert — rejected stays rejected
+    fake_client.upsert.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_persist_insights_updates_auto_in_place(tmp_path, monkeypatch):
+    """Re-run on a chat/auto row updates text/conf/status in place (no duplicate row)."""
+    db_path = str(tmp_path / "p.db")
+    monkeypatch.setattr(
+        "persona_rag.insights.persistence.make_engine",
+        lambda: make_engine(db_path),
+    )
+
+    now = datetime.now(UTC)
+    seed_id = "auto-row-id-1234"
+    with Session(make_engine(db_path)) as s:
+        s.add(
+            InsightRow(
+                id=seed_id,
+                category="bio",
+                subject="job",
+                text="works at acme",
+                confidence=0.7,
+                evidence_count=2,
+                earliest_date=now,
+                latest_date=now,
+                trajectory=None,
+                source_session_ids="[]",
+                source="chat",
+                review_status="auto",
+                edited_text=None,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        s.commit()
+
+    ci = ConsolidatedInsight(
+        id=seed_id,
+        category="bio",
+        canonical_subject="job",
+        text="works at acme — senior eng",  # refreshed
+        confidence=0.9,
+        evidence_count=5,
+        earliest_date=now,
+        latest_date=now,
+        trajectory="active 2024 → present",
+        source_session_ids=["s1", "s2", "s3"],
+    )
+    fake_client = MagicMock()
+    with patch(
+        "persona_rag.insights.persistence.embed_batch",
+        AsyncMock(return_value=[[0.0] * 1536]),
+    ):
+        await persist_insights(
+            [ci], statuses={seed_id: "auto"}, qdrant_client=fake_client, collection="self_insights"
+        )
+
+    # Still exactly one row with that id
+    with Session(make_engine(db_path)) as s:
+        rows = list(s.exec(select(InsightRow)).all())
+    assert len(rows) == 1
+    row = rows[0]
+    assert row.text == "works at acme — senior eng"
+    assert row.confidence == 0.9
+    assert row.evidence_count == 5
+    assert row.trajectory == "active 2024 → present"
+    # Qdrant upserted (auto stays embeddable)
+    fake_client.upsert.assert_called_once()

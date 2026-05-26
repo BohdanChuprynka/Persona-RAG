@@ -17,6 +17,11 @@ from persona_rag.insights.consolidator import ConsolidatedInsight
 from persona_rag.insights.router import ReviewStatus
 
 
+def _aware(dt: datetime) -> datetime:
+    """Coerce a naive datetime to UTC-aware; leave aware datetimes unchanged."""
+    return dt.replace(tzinfo=UTC) if dt.tzinfo is None else dt
+
+
 def persist_algo_signals(signals: dict[str, list[dict[str, Any]]]) -> None:
     """Replace algo_signal table contents with the new run's signals."""
     now = datetime.now(UTC)
@@ -54,34 +59,76 @@ async def persist_insights(
     """Write every insight to SQLite; embed + upsert only auto/approved to Qdrant."""
     now = datetime.now(UTC)
 
+    eligible_for_qdrant: list[ConsolidatedInsight] = []
+    eligible_statuses: dict[str, ReviewStatus] = {}
+
     with Session(make_engine()) as s:
         for ci in insights:
-            s.add(
-                InsightRow(
-                    id=ci.id,
-                    category=ci.category,
-                    subject=ci.canonical_subject,
-                    text=ci.text,
-                    confidence=ci.confidence,
-                    evidence_count=ci.evidence_count,
-                    earliest_date=ci.earliest_date,
-                    latest_date=ci.latest_date,
-                    trajectory=ci.trajectory,
-                    source_session_ids=json.dumps(ci.source_session_ids),
-                    source="chat",
-                    review_status=statuses[ci.id],
-                    edited_text=None,
-                    created_at=now,
-                    updated_at=now,
+            existing = s.get(InsightRow, ci.id)
+            if existing is None:
+                # New row — insert with the routed status
+                s.add(
+                    InsightRow(
+                        id=ci.id,
+                        category=ci.category,
+                        subject=ci.canonical_subject,
+                        text=ci.text,
+                        confidence=ci.confidence,
+                        evidence_count=ci.evidence_count,
+                        earliest_date=ci.earliest_date,
+                        latest_date=ci.latest_date,
+                        trajectory=ci.trajectory,
+                        source_session_ids=json.dumps(ci.source_session_ids),
+                        source="chat",
+                        review_status=statuses[ci.id],
+                        edited_text=None,
+                        created_at=now,
+                        updated_at=now,
+                    )
                 )
-            )
+                if statuses[ci.id] in ("auto", "approved"):
+                    eligible_for_qdrant.append(ci)
+                    eligible_statuses[ci.id] = statuses[ci.id]
+                continue
+
+            # Existing row — apply user-touch protection
+            if (
+                existing.source in ("user_verified", "onboarding")
+                or existing.review_status == "rejected"
+            ):
+                # User has authority on this insight. Only bump evidence freshness
+                # signals; do NOT replace text/status/source/confidence.
+                existing.evidence_count = ci.evidence_count
+                if _aware(ci.latest_date) > _aware(existing.latest_date):
+                    existing.latest_date = ci.latest_date
+                if _aware(ci.earliest_date) < _aware(existing.earliest_date):
+                    existing.earliest_date = ci.earliest_date
+                existing.updated_at = now
+                s.add(existing)
+                # Skip Qdrant — user-verified/onboarding already-correct point stays put;
+                # rejected stays out.
+                continue
+
+            # Existing row is source=chat AND status in (auto, pending) — full refresh.
+            existing.text = ci.text
+            existing.confidence = ci.confidence
+            existing.evidence_count = ci.evidence_count
+            existing.earliest_date = min(_aware(existing.earliest_date), _aware(ci.earliest_date))
+            existing.latest_date = max(_aware(existing.latest_date), _aware(ci.latest_date))
+            existing.trajectory = ci.trajectory
+            existing.source_session_ids = json.dumps(ci.source_session_ids)
+            existing.review_status = statuses[ci.id]
+            existing.updated_at = now
+            s.add(existing)
+            if statuses[ci.id] in ("auto", "approved"):
+                eligible_for_qdrant.append(ci)
+                eligible_statuses[ci.id] = statuses[ci.id]
         s.commit()
 
-    active = [ci for ci in insights if statuses[ci.id] in ("auto", "approved")]
-    if not active:
+    if not eligible_for_qdrant:
         return
 
-    vectors = await embed_batch([ci.text for ci in active])
+    vectors = await embed_batch([ci.text for ci in eligible_for_qdrant])
     points = [
         PointStruct(
             id=ci.id,
@@ -96,9 +143,9 @@ async def persist_insights(
                 "latest_date": ci.latest_date.isoformat(),
                 "trajectory": ci.trajectory,
                 "source": "chat",
-                "review_status": statuses[ci.id],
+                "review_status": eligible_statuses[ci.id],
             },
         )
-        for ci, vec in zip(active, vectors, strict=True)
+        for ci, vec in zip(eligible_for_qdrant, vectors, strict=True)
     ]
     qdrant_client.upsert(collection_name=collection, points=points)

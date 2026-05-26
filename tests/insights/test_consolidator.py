@@ -89,3 +89,15 @@ async def test_consolidate_groups_by_synonym(tmp_path):
     assert len(out) == 1
     assert out[0].canonical_subject == "c++"
     assert out[0].evidence_count == 3
+
+
+def test_stable_insight_id_is_deterministic():
+    from persona_rag.insights.consolidator import _stable_insight_id
+
+    a = _stable_insight_id("interest", "cyberpunk 2077")
+    b = _stable_insight_id("interest", "cyberpunk 2077")
+    assert a == b
+    assert len(a) == 16
+    # Different inputs → different IDs
+    assert a != _stable_insight_id("interest", "different")
+    assert a != _stable_insight_id("bio", "cyberpunk 2077")

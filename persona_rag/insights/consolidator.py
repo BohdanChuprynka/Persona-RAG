@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
-import uuid
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
@@ -16,6 +16,15 @@ from persona_rag.insights.extractor import RawInsight
 
 _PUNCT_RE = re.compile(r"[^\w\s+]+")
 _WS_RE = re.compile(r"\s+")
+
+
+def _stable_insight_id(category: str, canonical_subject: str) -> str:
+    """Deterministic 16-char hex ID — same (category, canonical_subject) always maps to same ID.
+
+    Lets persist_insights upsert across runs without losing user-touched state.
+    """
+    payload = f"{category}:{canonical_subject}"
+    return hashlib.sha1(payload.encode("utf-8")).hexdigest()[:16]
 
 
 def normalize_subject(subject: str, synonyms: dict[str, list[str]] | None = None) -> str:
@@ -129,7 +138,7 @@ async def consolidate(
 
         out.append(
             ConsolidatedInsight(
-                id=str(uuid.uuid4()),
+                id=_stable_insight_id(category, canon),
                 category=category,
                 canonical_subject=canon,
                 text=text,
