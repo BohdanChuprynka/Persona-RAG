@@ -284,3 +284,107 @@ async def handle_insights_onboarding(message: Message) -> None:
         f"Will ask {len(questions)} questions. Reply to each one in plain text.\n\n"
         "Type /insights skip to stop early. First question: " + questions[0].question
     )
+
+
+@router.message(Command("insights_stats"))
+async def handle_insights_stats(message: Message) -> None:
+    if message.from_user is None or message.from_user.id != get_settings().ADMIN_TELEGRAM_ID:
+        return
+    with Session(make_engine()) as s:
+        rows = list(s.exec(select(InsightRow)).all())
+
+    by_source: dict[str, int] = {}
+    by_status: dict[str, int] = {}
+    by_category: dict[str, int] = {}
+    for r in rows:
+        by_source[r.source] = by_source.get(r.source, 0) + 1
+        by_status[r.review_status] = by_status.get(r.review_status, 0) + 1
+        by_category[r.category] = by_category.get(r.category, 0) + 1
+
+    lines = [
+        "<b>Insights stats</b>",
+        f"total: {len(rows)}",
+        "",
+        "<b>by source:</b>  " + ", ".join(f"{k}={v}" for k, v in sorted(by_source.items())),
+        "<b>by status:</b>  " + ", ".join(f"{k}={v}" for k, v in sorted(by_status.items())),
+        "<b>by category:</b>  " + ", ".join(f"{k}={v}" for k, v in sorted(by_category.items())),
+    ]
+    await message.answer("\n".join(lines))
+
+
+@router.message(Command("insights_search"))
+async def handle_insights_search(message: Message) -> None:
+    if message.from_user is None or message.from_user.id != get_settings().ADMIN_TELEGRAM_ID:
+        return
+    parts = (message.text or "").split(maxsplit=1)
+    if len(parts) < 2:
+        await message.answer("Usage: /insights_search <query>")
+        return
+    query = parts[1].strip()
+
+    from persona_rag.index.embedder import embed_batch
+
+    s = get_settings()
+    vec = (await embed_batch([query]))[0]
+    client = make_qdrant_client()
+    resp = client.query_points(
+        collection_name=s.QDRANT_INSIGHTS_COLLECTION,
+        query=vec,
+        limit=5,
+        with_payload=True,
+    )
+    if not resp.points:
+        await message.answer("No matches.")
+        return
+    lines = [f"<b>Search:</b> {html.escape(query)}", ""]
+    for p in resp.points:
+        payload = p.payload or {}
+        lines.append(
+            f"• [{payload.get('source', '?')}] {payload.get('text', '')[:120]} "
+            f"(conf={payload.get('confidence', 0):.2f}, score={float(p.score):.2f})"
+        )
+    await message.answer("\n".join(lines))
+
+
+@router.message(Command("insights_delete"))
+async def handle_insights_delete(message: Message) -> None:
+    if message.from_user is None or message.from_user.id != get_settings().ADMIN_TELEGRAM_ID:
+        return
+    parts = (message.text or "").split()
+    if len(parts) < 2:
+        await message.answer("Usage: /insights_delete <insight_id>")
+        return
+    iid = parts[1].strip()
+    s = get_settings()
+    client = make_qdrant_client()
+    verification.reject_insight(iid, qdrant_client=client, collection=s.QDRANT_INSIGHTS_COLLECTION)
+    await message.answer(f"Marked rejected: {iid}")
+
+
+@router.message(Command("insights_show"))
+async def handle_insights_show(message: Message) -> None:
+    if message.from_user is None or message.from_user.id != get_settings().ADMIN_TELEGRAM_ID:
+        return
+    parts = (message.text or "").split()
+    if len(parts) < 2:
+        await message.answer("Usage: /insights_show <insight_id>")
+        return
+    iid = parts[1].strip()
+    with Session(make_engine()) as s:
+        row = s.get(InsightRow, iid)
+    if row is None:
+        await message.answer(f"No insight with id {iid}")
+        return
+    lines = [
+        f"<b>Insight {iid}</b>",
+        f"text: {html.escape(row.text)}",
+        f"category: {row.category}, subject: {row.subject}",
+        f"source: {row.source}, status: {row.review_status}",
+        f"confidence: {row.confidence:.2f}, evidence: {row.evidence_count}",
+        f"earliest: {row.earliest_date:%Y-%m-%d}, latest: {row.latest_date:%Y-%m-%d}",
+    ]
+    if row.trajectory:
+        lines.append(f"trajectory: {row.trajectory}")
+    if row.edited_text:
+        lines.append(f"\n<i>pre-edit text:</i> {html.escape(row.edited_text)}")
+    await message.answer("\n".join(lines))
