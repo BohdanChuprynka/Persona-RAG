@@ -93,7 +93,8 @@ def parse_extractor_response(text: str, *, session_id: str) -> list[RawInsight]:
     try:
         payload = json.loads(cleaned)
     except json.JSONDecodeError as e:
-        raise ValueError(f"non-JSON extractor output: {e}") from e
+        preview = (text[:200] + "…") if len(text) > 200 else text
+        raise ValueError(f"non-JSON extractor output: {e} | preview={preview!r}") from e
 
     items = payload.get("insights", [])
     if not isinstance(items, list):
@@ -141,5 +142,11 @@ async def extract_from_session(
         {"role": "system", "content": EXTRACT_SYSTEM_PROMPT.format(persona_name=persona_name)},
         {"role": "user", "content": user_msg},
     ]
-    response = await chat_complete(messages, model=s.INSIGHTS_EXTRACT_MODEL)
+    response = await chat_complete(
+        messages,
+        model=s.INSIGHTS_EXTRACT_MODEL,
+        temperature=0.2,
+        max_tokens=2000,
+        response_format={"type": "json_object"},
+    )
     return parse_extractor_response(response, session_id=session.session_id)

@@ -152,3 +152,32 @@ async def test_extract_from_session_swallows_parse_failure():
         pytest.raises(ValueError),
     ):
         await extract_from_session(sessions[0], persona_name="Bohdan", entity_hints=[])
+
+
+@pytest.mark.asyncio
+async def test_extract_from_session_uses_json_mode_and_low_temp():
+    """Regression: prior to fix, extractor inherited chatbot defaults (temp=0.8, max=300,
+    no response_format), causing truncated / non-JSON model output."""
+    now = datetime(2025, 1, 1, tzinfo=UTC)
+    rows = [_t("я кодю", now, ctx=["що робиш?"])]
+    sessions = build_sessions(rows, gap_hours=6)
+    with patch(
+        "persona_rag.insights.extractor.chat_complete",
+        AsyncMock(return_value='{"insights": []}'),
+    ) as mock_chat:
+        await extract_from_session(sessions[0], persona_name="Bohdan", entity_hints=[])
+    kwargs = mock_chat.call_args.kwargs
+    assert kwargs["response_format"] == {"type": "json_object"}
+    assert kwargs["temperature"] == 0.2
+    assert kwargs["max_tokens"] >= 1500
+
+
+def test_parse_extractor_response_error_includes_preview():
+    """Error msg must show what model actually returned, not just 'char 0'."""
+    bad = "Here are the insights you requested:\n\nSorry, I cannot help."
+    with pytest.raises(ValueError, match="preview="):
+        parse_extractor_response(bad, session_id="s1")
+    try:
+        parse_extractor_response(bad, session_id="s1")
+    except ValueError as e:
+        assert "Here are the insights" in str(e)

@@ -129,6 +129,8 @@ async def consolidate(
                     }
                 ],
                 model=s.INSIGHTS_CONSOLIDATE_MODEL,
+                temperature=0.2,
+                max_tokens=500,
             )
             text, trajectory = _split_consolidation(response)
         else:
