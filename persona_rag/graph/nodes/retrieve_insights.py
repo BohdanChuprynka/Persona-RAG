@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from qdrant_client.models import FieldCondition, Filter, MatchAny
 from sqlmodel import Session, select
 
 from persona_rag._logging import get_logger
@@ -32,6 +33,14 @@ async def retrieve_insights(state: GraphState) -> GraphState:
             query=vec,
             limit=pool_size,
             with_payload=True,
+            query_filter=Filter(
+                must=[
+                    FieldCondition(
+                        key="review_status",
+                        match=MatchAny(any=["auto", "approved"]),
+                    )
+                ]
+            ),
         )
         candidates = [from_qdrant_point(p) for p in response.points]
         reranked = rerank_with_recency(candidates, half_life_days=s.INSIGHTS_RECENCY_HALF_LIFE_DAYS)
