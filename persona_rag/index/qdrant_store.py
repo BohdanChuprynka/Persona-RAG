@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from collections.abc import Iterable
 
 from qdrant_client import QdrantClient
@@ -22,6 +23,17 @@ from persona_rag.config import get_settings
 from persona_rag.models import PersonaTurn, RetrievedTurn
 
 VECTOR_SIZE = 1536  # text-embedding-3-small
+
+# Qdrant accepts only unsigned int or UUID string as point IDs. Our insight rows
+# use a 16-char sha1 hex as the stable SQLite primary key (deterministic across
+# runs). This helper bridges the two: deterministic mapping sqlite_id → UUID5.
+_QDRANT_ID_NS = uuid.UUID("6b8f1f4c-1c4a-4f3a-9b9e-1d3c2f5a7e09")
+
+
+def to_qdrant_point_id(sqlite_id: str) -> str:
+    """Map an InsightRow.id (16-hex) to a deterministic Qdrant UUID string."""
+    return str(uuid.uuid5(_QDRANT_ID_NS, sqlite_id))
+
 
 _Condition = (
     FieldCondition

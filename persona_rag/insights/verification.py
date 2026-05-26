@@ -16,6 +16,7 @@ from sqlmodel import Session, select
 from persona_rag.db.engine import make_engine
 from persona_rag.db.models import InsightRow, VerificationSession
 from persona_rag.index.embedder import embed_batch
+from persona_rag.index.qdrant_store import to_qdrant_point_id
 
 
 def start_session(user_id: int) -> VerificationSession:
@@ -73,9 +74,10 @@ def _upsert_point(
         collection_name=collection,
         points=[
             PointStruct(
-                id=row.id,
+                id=to_qdrant_point_id(row.id),
                 vector=vector,
                 payload={
+                    "sqlite_id": row.id,
                     "category": row.category,
                     "subject": row.subject,
                     "text": row.text,

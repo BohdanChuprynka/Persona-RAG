@@ -13,6 +13,7 @@ from sqlmodel import Session, select
 from persona_rag.db.engine import make_engine
 from persona_rag.db.models import AlgoSignal, InsightRow
 from persona_rag.index.embedder import embed_batch
+from persona_rag.index.qdrant_store import to_qdrant_point_id
 from persona_rag.insights.consolidator import ConsolidatedInsight
 from persona_rag.insights.router import ReviewStatus
 
@@ -131,9 +132,10 @@ async def persist_insights(
     vectors = await embed_batch([ci.text for ci in eligible_for_qdrant])
     points = [
         PointStruct(
-            id=ci.id,
+            id=to_qdrant_point_id(ci.id),
             vector=vec,
             payload={
+                "sqlite_id": ci.id,
                 "category": ci.category,
                 "subject": ci.canonical_subject,
                 "text": ci.text,

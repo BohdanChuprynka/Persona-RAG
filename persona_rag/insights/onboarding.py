@@ -15,6 +15,7 @@ from sqlmodel import Session
 from persona_rag.db.engine import make_engine
 from persona_rag.db.models import InsightRow
 from persona_rag.index.embedder import embed_batch
+from persona_rag.index.qdrant_store import to_qdrant_point_id
 
 
 class OnboardingQuestion(BaseModel):
@@ -82,9 +83,10 @@ async def save_answer(
     vectors = await embed_batch([r.text for r in rows])
     points = [
         PointStruct(
-            id=r.id,
+            id=to_qdrant_point_id(r.id),
             vector=vec,
             payload={
+                "sqlite_id": r.id,
                 "category": r.category,
                 "subject": r.subject,
                 "text": r.text,

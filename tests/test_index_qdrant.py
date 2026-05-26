@@ -1,9 +1,26 @@
+import uuid
 from datetime import UTC, datetime
 
 from qdrant_client import QdrantClient
 
-from persona_rag.index.qdrant_store import ensure_collection, search_dense, upsert_turns
+from persona_rag.index.qdrant_store import (
+    ensure_collection,
+    search_dense,
+    to_qdrant_point_id,
+    upsert_turns,
+)
 from persona_rag.models import PersonaTurn
+
+
+def test_to_qdrant_point_id_is_deterministic_uuid() -> None:
+    sqlite_id = "f1dd6b24e325a29a"
+    a = to_qdrant_point_id(sqlite_id)
+    b = to_qdrant_point_id(sqlite_id)
+    assert a == b
+    # Must parse as a valid UUID (else Qdrant rejects with 400 Bad Request).
+    uuid.UUID(a)
+    # Different inputs must produce different IDs.
+    assert to_qdrant_point_id("other") != a
 
 
 def _client() -> QdrantClient:
