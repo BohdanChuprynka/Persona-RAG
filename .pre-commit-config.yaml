@@ -24,5 +24,7 @@ repos:
           - langchain-core
           - mlflow
           - tiktoken
+          - pyyaml
+          - types-PyYAML
         args: [--strict, persona_rag]
         pass_filenames: false
