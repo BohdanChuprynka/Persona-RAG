@@ -73,3 +73,57 @@ class AuditLog(SQLModel, table=True):
     action: str
     target_id: int | None = None
     details: str | None = None
+
+
+class AlgoSignal(SQLModel, table=True):
+    __tablename__ = "algo_signal"
+
+    id: int | None = Field(default=None, primary_key=True)
+    kind: str = Field(index=True)  # entity|rhythm|language|phase|style
+    subject: str = Field(index=True)
+    value_json: str
+    first_seen: datetime
+    last_seen: datetime
+    evidence_count: int
+    updated_at: datetime
+
+
+class InsightRow(SQLModel, table=True):
+    __tablename__ = "insight_row"
+
+    id: str = Field(primary_key=True)
+    category: str = Field(index=True)  # bio|opinion|interest|behavior
+    subject: str = Field(index=True)
+    text: str
+    confidence: float
+    evidence_count: int = 1
+    earliest_date: datetime
+    latest_date: datetime
+    trajectory: str | None = None
+    source_session_ids: str  # JSON list[str], empty list for onboarding
+    source: str = Field(index=True)  # chat|user_verified|onboarding
+    review_status: str = Field(index=True)  # auto|pending|approved|rejected
+    edited_text: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class InsightRunState(SQLModel, table=True):
+    __tablename__ = "insight_run_state"
+
+    session_id: str = Field(primary_key=True)
+    last_extracted_at: datetime
+    insights_count: int
+    failed: bool = False
+    error_message: str | None = None
+
+
+class VerificationSession(SQLModel, table=True):
+    __tablename__ = "verification_session"
+
+    user_id: int = Field(primary_key=True)
+    phase: str  # idle|phase1_in_progress|phase1_done|phase2_in_progress|phase2_done
+    current_insight_id: str | None = None
+    current_question_id: str | None = None
+    started_at: datetime
+    updated_at: datetime
