@@ -9,6 +9,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ValidationError
 
+from persona_rag.config import get_settings
+from persona_rag.generate.llm_client import chat_complete
 from persona_rag.insights.sessions import SessionDoc
 
 VALID_CATEGORIES = {"bio", "opinion", "interest", "behavior"}
@@ -119,3 +121,25 @@ def parse_extractor_response(text: str, *, session_id: str) -> list[RawInsight]:
         except (ValidationError, KeyError, ValueError):
             continue
     return out
+
+
+async def extract_from_session(
+    session: SessionDoc,
+    *,
+    persona_name: str,
+    entity_hints: list[str],
+) -> list[RawInsight]:
+    """Single LLM call. Returns parsed insights. Raises ValueError on bad output."""
+    s = get_settings()
+    hint_block = (
+        ("Hints — entities the persona often mentions: " + ", ".join(entity_hints) + "\n\n")
+        if entity_hints
+        else ""
+    )
+    user_msg = hint_block + render_session(session, persona_name)
+    messages = [
+        {"role": "system", "content": EXTRACT_SYSTEM_PROMPT.format(persona_name=persona_name)},
+        {"role": "user", "content": user_msg},
+    ]
+    response = await chat_complete(messages, model=s.INSIGHTS_EXTRACT_MODEL)
+    return parse_extractor_response(response, session_id=session.session_id)

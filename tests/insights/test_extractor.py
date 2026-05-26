@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -9,6 +10,7 @@ from persona_rag.db.models import PersonaTurnRow
 from persona_rag.insights.extractor import (
     EXTRACT_SYSTEM_PROMPT,
     RawInsight,
+    extract_from_session,
     parse_extractor_response,
     render_session,
 )
@@ -94,3 +96,59 @@ def test_parse_extractor_response_rejects_unknown_category():
     response = f'{{"insights": [{item}]}}'
     out = parse_extractor_response(response, session_id="s1")
     assert out == []
+
+
+@pytest.mark.asyncio
+async def test_extract_from_session_passes_entity_hints():
+    now = datetime(2025, 1, 1, tzinfo=UTC)
+    rows = [_t("я кодю на python", now, ctx=["що робиш?"])]
+    sessions = build_sessions(rows, gap_hours=6)
+    canned = '{"insights": []}'
+    with patch(
+        "persona_rag.insights.extractor.chat_complete",
+        AsyncMock(return_value=canned),
+    ) as mock_chat:
+        out = await extract_from_session(
+            sessions[0],
+            persona_name="Bohdan",
+            entity_hints=["python", "cyberpunk"],
+        )
+    assert out == []
+    # Hints should be visible somewhere in the user message
+    messages = mock_chat.call_args.args[0]
+    user_msg = next(m for m in messages if m["role"] == "user")
+    assert "python" in user_msg["content"]
+    assert "cyberpunk" in user_msg["content"]
+
+
+@pytest.mark.asyncio
+async def test_extract_from_session_returns_parsed_insights():
+    now = datetime(2025, 1, 1, tzinfo=UTC)
+    rows = [_t("я грав cyberpunk", now, ctx=["що грав?"])]
+    sessions = build_sessions(rows, gap_hours=6)
+    canned = (
+        '{"insights": [{"category": "interest", "subject": "cyberpunk 2077",'
+        ' "text": "Plays Cyberpunk", "confidence": 0.9, "source_quote": "я грав cyberpunk"}]}'
+    )
+    with patch(
+        "persona_rag.insights.extractor.chat_complete",
+        AsyncMock(return_value=canned),
+    ):
+        out = await extract_from_session(sessions[0], persona_name="Bohdan", entity_hints=[])
+    assert len(out) == 1
+    assert out[0].subject == "cyberpunk 2077"
+
+
+@pytest.mark.asyncio
+async def test_extract_from_session_swallows_parse_failure():
+    now = datetime(2025, 1, 1, tzinfo=UTC)
+    rows = [_t("hi", now, ctx=["yo"])]
+    sessions = build_sessions(rows, gap_hours=6)
+    with (
+        patch(
+            "persona_rag.insights.extractor.chat_complete",
+            AsyncMock(return_value="garbage non-json"),
+        ),
+        pytest.raises(ValueError),
+    ):
+        await extract_from_session(sessions[0], persona_name="Bohdan", entity_hints=[])
