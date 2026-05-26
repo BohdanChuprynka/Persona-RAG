@@ -35,5 +35,6 @@ def build_prompt_node(state: GraphState) -> GraphState:
         retrieved=state.get("retrieved", []),
         session=state.get("session", []),
         incoming=state["incoming"],
+        insights=state.get("insights"),
     )
     return state

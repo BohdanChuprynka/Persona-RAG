@@ -2,6 +2,10 @@
 # Reason: SYSTEM_TEMPLATE contains intentional Cyrillic and en-dash characters.
 from __future__ import annotations
 
+from typing import Any
+
+from persona_rag.config import get_settings
+from persona_rag.insights.persona_description import generate_persona_description
 from persona_rag.models import ChatMessage, RetrievedTurn, StyleAnchors
 
 SYSTEM_TEMPLATE = """\
@@ -17,6 +21,8 @@ You are texting a friend on a messenger. You are NOT an assistant.
 
 ## What you remember about this contact
 {user_memory}
+
+## What you do and care about (from your own chats){insights_block}
 
 ## How to reply — read this carefully
 
@@ -61,7 +67,15 @@ def build_messages(
     retrieved: list[RetrievedTurn],
     session: list[ChatMessage],
     incoming: str,
+    insights: dict[str, Any] | None = None,
 ) -> list[dict[str, str]]:
+    s = get_settings()
+    # Generated persona description fallback
+    if s.INSIGHTS_USE_GENERATED_PERSONA_DESCRIPTION:
+        persona_description = generate_persona_description(fallback=persona_description)
+
+    insights_block = _render_insights_block(insights or {})
+
     system = SYSTEM_TEMPLATE.format(
         persona_name=persona_name,
         persona_description=persona_description,
@@ -69,7 +83,8 @@ def build_messages(
         emoji_rate_per_char=style_anchors.emoji_rate_per_char,
         primary_language=style_anchors.primary_language,
         top_bigrams_joined=", ".join(style_anchors.top_bigrams[:5]) or "(none)",
-        user_memory=user_memory or "(no prior context with this user)",
+        user_memory=user_memory or "(no prior context with this contact)",
+        insights_block=insights_block,
     )
     msgs: list[dict[str, str]] = [{"role": "system", "content": system}]
     for r in retrieved:
@@ -80,3 +95,38 @@ def build_messages(
         msgs.append({"role": m.role, "content": m.content})
     msgs.append({"role": "user", "content": incoming})
     return msgs
+
+
+def _render_insights_block(insights: dict[str, Any]) -> str:
+    """Render semantic + static insight bullets. Empty string when nothing to render."""
+    semantic = insights.get("semantic", [])
+    static = insights.get("static", {})
+
+    lines: list[str] = []
+    if semantic:
+        lines.append("")
+        lines.append("Things you talk about / are into:")
+        for r in semantic:
+            traj = f"  [{r.trajectory}]" if r.trajectory else ""
+            lines.append(f"- {r.text}{traj}")
+
+    languages = static.get("languages", [])
+    entities = static.get("entities", [])
+    if languages or entities:
+        lines.append("")
+        lines.append("Patterns:")
+        if languages:
+            tops = languages[:3]
+            parts = [
+                f"~{int(lang['percentage'] * 100)}% {lang['subject']}"
+                for lang in tops
+                if lang.get("percentage")
+            ]
+            mix = " / ".join(parts)
+            if mix:
+                lines.append(f"- chat is {mix}")
+        if entities:
+            ents = ", ".join(e["subject"] for e in entities[:3])
+            lines.append(f"- recurring topics: {ents}")
+
+    return "\n" + "\n".join(lines) if lines else ""
