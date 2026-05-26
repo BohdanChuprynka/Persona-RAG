@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+import time
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
@@ -11,8 +12,11 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel
 
+from persona_rag._logging import get_logger
 from persona_rag.generate.llm_client import chat_complete
 from persona_rag.insights.extractor import RawInsight
+
+log = get_logger()
 
 _PUNCT_RE = re.compile(r"[^\w\s+]+")
 _WS_RE = re.compile(r"\s+")
@@ -106,8 +110,17 @@ async def consolidate(
         key = (r.category, normalize_subject(r.subject, synonyms))
         groups[key].append(r)
 
+    n_merge_calls = sum(1 for m in groups.values() if len(m) >= 3)
+    log.info(
+        "insights_stage_d_start",
+        n_raws=len(raws),
+        n_groups=len(groups),
+        n_llm_merges=n_merge_calls,
+    )
     s = get_settings()
     out: list[ConsolidatedInsight] = []
+    merge_i = 0
+    t0 = time.monotonic()
     for (category, canon), members in groups.items():
         members.sort(key=lambda r: r.extracted_at)
         confidence = max(r.confidence for r in members)
@@ -116,6 +129,7 @@ async def consolidate(
         session_ids = list({r.session_id for r in members})
 
         if len(members) >= 3:
+            merge_i += 1
             obs_block = "\n".join(
                 f"- [{r.extracted_at:%Y-%m-%d}] (conf={r.confidence:.2f}) {r.text}" for r in members
             )
@@ -133,6 +147,15 @@ async def consolidate(
                 max_tokens=500,
             )
             text, trajectory = _split_consolidation(response)
+            log.info(
+                "insights_merge_done",
+                i=merge_i,
+                n=n_merge_calls,
+                category=category,
+                subject=canon,
+                n_members=len(members),
+                total_s=round(time.monotonic() - t0, 1),
+            )
         else:
             best = max(members, key=lambda r: r.confidence)
             text = best.text

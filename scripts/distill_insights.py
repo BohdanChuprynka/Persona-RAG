@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -101,20 +102,58 @@ async def main_async(args: argparse.Namespace) -> int:
             for row in s.exec(select(InsightRunState).where(InsightRunState.failed == False)).all():  # noqa: E712
                 skip_ids.add(row.session_id)
 
-    raws = []
-    for session in high:
-        if session.session_id in skip_ids and args.force_session != session.session_id:
-            continue
+    to_process = [
+        s for s in high if s.session_id not in skip_ids or args.force_session == s.session_id
+    ]
+    log.info(
+        "insights_stage_c_start",
+        n_to_process=len(to_process),
+        n_skipped=len(high) - len(to_process),
+    )
+    raws: list = []
+    n_ok = 0
+    n_failed = 0
+    t0 = time.monotonic()
+    for i, session in enumerate(to_process, start=1):
+        s_t0 = time.monotonic()
         try:
             extracted = await extract_from_session(
                 session, persona_name=settings.PERSONA_NAME, entity_hints=entity_hints
             )
             raws.extend(extracted)
             _mark_session_extracted(session.session_id, len(extracted))
+            n_ok += 1
+            log.info(
+                "insights_session_done",
+                i=i,
+                n=len(to_process),
+                session_id=session.session_id,
+                n_insights=len(extracted),
+                cumulative_raws=len(raws),
+                ok=n_ok,
+                failed=n_failed,
+                elapsed_s=round(time.monotonic() - s_t0, 2),
+                total_s=round(time.monotonic() - t0, 1),
+            )
         except Exception as e:
-            log.warning("insights_session_failed", session_id=session.session_id, error=str(e))
+            n_failed += 1
+            log.warning(
+                "insights_session_failed",
+                i=i,
+                n=len(to_process),
+                session_id=session.session_id,
+                error=str(e)[:300],
+                ok=n_ok,
+                failed=n_failed,
+            )
             _mark_session_failed(session.session_id, str(e))
-    log.info("insights_stage_c_done", n_raw=len(raws))
+    log.info(
+        "insights_stage_c_done",
+        n_raw=len(raws),
+        n_ok=n_ok,
+        n_failed=n_failed,
+        total_s=round(time.monotonic() - t0, 1),
+    )
 
     # Stage D — consolidate
     synonyms_path = settings.INSIGHTS_SYNONYMS_PATH or _default_synonyms_path()
