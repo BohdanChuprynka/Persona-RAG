@@ -50,10 +50,12 @@ class User(SQLModel, table=True):
     notes: str | None = None
 
 
-class UserMemory(SQLModel, table=True):
+class ContactMemory(SQLModel, table=True):
+    __tablename__ = "contact_memory"
+
     user_id: int = Field(primary_key=True)
     summary: str
-    last_interaction: datetime
+    last_interaction: datetime | None = None
     updated_at: datetime
 
 

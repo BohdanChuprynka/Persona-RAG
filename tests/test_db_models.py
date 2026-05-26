@@ -3,11 +3,11 @@ from datetime import UTC, datetime
 from sqlmodel import Session, SQLModel, create_engine, select
 
 from persona_rag.db.models import (  # noqa: F401
+    ContactMemory,
     Conversation,
     Message,
     PersonaTurnRow,
     User,
-    UserMemory,
 )
 from persona_rag.models import UserState
 

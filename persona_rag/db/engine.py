@@ -14,6 +14,27 @@ def make_engine(path: str | Path | None = None) -> Engine:
     url = f"sqlite:///{target}"
     engine = create_engine(url, echo=False)
     SQLModel.metadata.create_all(engine)
+
+    # One-time rename: usermemory → contact_memory. Idempotent.
+    with engine.begin() as conn:
+        _sql = (
+            "SELECT name FROM sqlite_master"
+            " WHERE type='table' AND name IN ('usermemory', 'contact_memory')"
+        )
+        rows = conn.exec_driver_sql(_sql).fetchall()
+        names = {r[0] for r in rows}
+        if "usermemory" in names and "contact_memory" not in names:
+            conn.exec_driver_sql("ALTER TABLE usermemory RENAME TO contact_memory")
+        elif "usermemory" in names and "contact_memory" in names:
+            # Both exist — assume a previous half-migration. Drop the empty one.
+            old_count = conn.exec_driver_sql("SELECT COUNT(*) FROM usermemory").scalar() or 0
+            new_count = conn.exec_driver_sql("SELECT COUNT(*) FROM contact_memory").scalar() or 0
+            if old_count > 0 and new_count == 0:
+                conn.exec_driver_sql("DROP TABLE contact_memory")
+                conn.exec_driver_sql("ALTER TABLE usermemory RENAME TO contact_memory")
+            else:
+                conn.exec_driver_sql("DROP TABLE usermemory")
+
     return engine
 
 
