@@ -247,10 +247,40 @@ async def handle_insights_callback(callback: CallbackQuery) -> None:
     if callback.message is None:
         return
     if nxt is None:
-        await callback.message.answer("All done! Run /insights stats to see counts.")
+        await callback.message.answer(
+            "Phase 1 done.\n\n"
+            "Phase 2 (optional): I'll ask you ~10 questions about things your "
+            "chats don't reveal. Type /insights_onboarding to start, or /insights "
+            "skip to finish here."
+        )
         verification.stop_session(callback.from_user.id)
         return
     await callback.message.answer(
         _render_insight_for_review(nxt),
         reply_markup=_verify_keyboard(nxt.id),
+    )
+
+
+# Slash commands can't have a space in aiogram routing — use underscore.
+@router.message(Command("insights_onboarding"))
+async def handle_insights_onboarding(message: Message) -> None:
+    if message.from_user is None or message.from_user.id != get_settings().ADMIN_TELEGRAM_ID:
+        return
+    # For v1: simplified linear flow — bot asks each question; user replies; bot
+    # parses + stores. The user MUST reply to each prompt before the next is sent.
+    from pathlib import Path as _Path
+
+    from persona_rag.insights.onboarding import load_questions
+
+    s = get_settings()
+    qpath = s.INSIGHTS_ONBOARDING_PATH or (
+        _Path(__file__).parent.parent.parent / "insights" / "onboarding_questions.yaml"
+    )
+    if not qpath.exists():
+        await message.answer(f"Question file missing: {qpath}")
+        return
+    questions = load_questions(qpath)
+    await message.answer(
+        f"Will ask {len(questions)} questions. Reply to each one in plain text.\n\n"
+        "Type /insights skip to stop early. First question: " + questions[0].question
     )

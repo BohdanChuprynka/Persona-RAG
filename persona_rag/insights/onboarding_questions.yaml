@@ -1,0 +1,69 @@
+- id: full_name
+  category: bio
+  subject: name
+  question: "What's your full name?"
+  parse: string
+  optional: false
+
+- id: current_city
+  category: bio
+  subject: location
+  question: "Where do you currently live (city)?"
+  parse: string
+  optional: false
+
+- id: age
+  category: bio
+  subject: age
+  question: "How old are you?"
+  parse: string
+  optional: false
+
+- id: school_or_work
+  category: bio
+  subject: school or work
+  question: "Where do you study or work right now?"
+  parse: string
+  optional: false
+
+- id: current_projects
+  category: interest
+  subject: current projects
+  question: "What are you working on this month? List up to 3 things, one per line."
+  parse: multiline_list
+  optional: true
+
+- id: long_term_goal
+  category: bio
+  subject: long-term goal
+  question: "One-sentence answer: what's your main goal for the next year?"
+  parse: string
+  optional: true
+
+- id: hot_takes
+  category: opinion
+  subject: hot takes
+  question: "Any opinions you'd defend in an argument? Up to 5, one per line."
+  parse: multiline_list
+  optional: true
+
+- id: pet_peeves
+  category: opinion
+  subject: pet peeves
+  question: "Things that annoy you. Up to 5, one per line."
+  parse: multiline_list
+  optional: true
+
+- id: favorite_topics
+  category: interest
+  subject: favorite topics
+  question: "Topics you love talking about. One per line."
+  parse: multiline_list
+  optional: true
+
+- id: communication_style_notes
+  category: behavior
+  subject: communication style
+  question: "Anything about how you text that the bot should mimic? (E.g. 'I never use punctuation', 'I love memes')"
+  parse: string
+  optional: true
