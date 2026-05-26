@@ -93,6 +93,29 @@ class Settings(BaseSettings):
     MAX_OPENAI_RPS: int = 2
     PENDING_BUFFER_SIZE: int = 10
 
+    # Insights pipeline
+    INSIGHTS_ENABLED: bool = True
+    INSIGHTS_EXTRACT_MODEL: str = "gpt-4o"
+    INSIGHTS_CONSOLIDATE_MODEL: str = "gpt-4o-mini"
+    INSIGHTS_HISTORY_YEARS: float = 2.5
+    INSIGHTS_MIN_SESSION_TURNS: int = 10
+    INSIGHTS_MIN_SESSION_CHARS: int = 300
+    INSIGHTS_MAX_SESSIONS: int = 600
+    INSIGHTS_TOP_K_SEMANTIC: int = 3
+    INSIGHTS_TOP_N_STATIC: int = 5
+    INSIGHTS_CONFIDENCE_THRESHOLD: float = 0.7
+    INSIGHTS_MIN_EVIDENCE: int = 2
+    INSIGHTS_RECENCY_HALF_LIFE_DAYS: int = 365
+    INSIGHTS_STALE_DEMOTE_YEARS: float = 2.0
+    INSIGHTS_STALE_DEMOTE_MIN_EVIDENCE: int = 5
+    INSIGHTS_BUDGET_HARD_CAP_USD: float = 5.0
+    INSIGHTS_SYNONYMS_PATH: Path | None = None
+    INSIGHTS_ONBOARDING_PATH: Path | None = None
+    INSIGHTS_STATIC_PATTERNS_ENABLED: bool = True
+    INSIGHTS_PROMPT_TOP_ENTITIES: int = 3
+    INSIGHTS_USE_GENERATED_PERSONA_DESCRIPTION: bool = True
+    QDRANT_INSIGHTS_COLLECTION: str = "self_insights"
+
 
 @lru_cache
 def get_settings() -> Settings:
