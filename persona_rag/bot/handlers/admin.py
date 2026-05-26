@@ -3,16 +3,18 @@ from __future__ import annotations
 import html
 from datetime import UTC, datetime
 
-from aiogram import Router
+from aiogram import F, Router
 from aiogram.filters import Command
-from aiogram.types import Message
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from sqlmodel import Session, select
 
 from persona_rag.bot import debug_trace
 from persona_rag.bot.auth import approve_user, block_user, get_pending
 from persona_rag.config import get_settings
 from persona_rag.db.engine import make_engine
-from persona_rag.db.models import User
+from persona_rag.db.models import InsightRow, User
+from persona_rag.index.qdrant_store import make_client as make_qdrant_client
+from persona_rag.insights import verification
 from persona_rag.models import UserState
 
 router = Router(name="admin")
@@ -157,3 +159,98 @@ async def handle_debug(message: Message) -> None:
     if prompt and prompt[0].get("role") == "system":
         sys_msg = html.escape(prompt[0]["content"][:3500])
         await message.answer(f"<b>System prompt:</b>\n<pre>{sys_msg}</pre>")
+
+
+def _verify_keyboard(insight_id: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="✓ Yes", callback_data=f"insights:yes:{insight_id}"),
+                InlineKeyboardButton(text="✏️ Fix", callback_data=f"insights:fix:{insight_id}"),
+                InlineKeyboardButton(text="✗ No", callback_data=f"insights:no:{insight_id}"),
+            ],
+            [
+                InlineKeyboardButton(text="⏭ Skip", callback_data=f"insights:skip:{insight_id}"),
+                InlineKeyboardButton(text="🛑 Stop", callback_data=f"insights:stop:{insight_id}"),
+            ],
+        ]
+    )
+
+
+def _render_insight_for_review(insight: InsightRow) -> str:
+    return (
+        f"<b>Insight</b>\n"
+        f"<i>I think you {html.escape(insight.text)}</i>\n\n"
+        f"category: {insight.category}  |  confidence: {insight.confidence:.2f}\n"
+        f"seen in {insight.evidence_count} session(s),"
+        f" last in {insight.latest_date:%Y-%m}\n"
+    )
+
+
+@router.message(Command("insights"))
+async def handle_insights(message: Message) -> None:
+    if message.from_user is None or message.from_user.id != get_settings().ADMIN_TELEGRAM_ID:
+        return
+    parts = (message.text or "").split()
+    if len(parts) < 2 or parts[1] != "verify":
+        await message.answer("Usage: /insights verify")
+        return
+
+    verification.start_session(message.from_user.id)
+    nxt = verification.next_pending_insight(message.from_user.id)
+    if nxt is None:
+        await message.answer("No pending insights to verify.")
+        return
+    await message.answer(
+        _render_insight_for_review(nxt),
+        reply_markup=_verify_keyboard(nxt.id),
+    )
+
+
+@router.callback_query(F.data.startswith("insights:"))
+async def handle_insights_callback(callback: CallbackQuery) -> None:
+    if callback.from_user.id != get_settings().ADMIN_TELEGRAM_ID:
+        return
+    if callback.data is None:
+        return
+    _, action, insight_id = callback.data.split(":", 2)
+    s = get_settings()
+    client = make_qdrant_client()
+
+    if action == "yes":
+        await verification.accept_insight(
+            insight_id, qdrant_client=client, collection=s.QDRANT_INSIGHTS_COLLECTION
+        )
+        await callback.answer("✓ verified")
+    elif action == "no":
+        verification.reject_insight(
+            insight_id, qdrant_client=client, collection=s.QDRANT_INSIGHTS_COLLECTION
+        )
+        await callback.answer("✗ rejected")
+    elif action == "skip":
+        await callback.answer("⏭ skipped")
+    elif action == "stop":
+        verification.stop_session(callback.from_user.id)
+        await callback.answer("🛑 stopped")
+        if callback.message is not None:
+            await callback.message.answer("Stopped. Resume any time with /insights verify.")
+        return
+    elif action == "fix":
+        # Two-message flow: ask for new text. The next non-command message becomes the new text.
+        # For the v1 cut, just acknowledge and tell user to use a more detailed flow later.
+        await callback.answer(
+            "Type the corrected version as a reply. (Manual flow for v1.)", show_alert=True
+        )
+        return
+
+    nxt = verification.next_pending_insight(callback.from_user.id)
+    if callback.message is None:
+        return
+    if nxt is None:
+        await callback.message.answer("All done! Run /insights stats to see counts.")
+        verification.stop_session(callback.from_user.id)
+        return
+    await callback.message.answer(
+        _render_insight_for_review(nxt),
+        reply_markup=_verify_keyboard(nxt.id),
+    )
