@@ -110,17 +110,17 @@ async def consolidate(
         key = (r.category, normalize_subject(r.subject, synonyms))
         groups[key].append(r)
 
-    n_merge_calls = sum(1 for m in groups.values() if len(m) >= 3)
+    total_merges = sum(1 for m in groups.values() if len(m) >= 3)
     log.info(
         "insights_stage_d_start",
-        n_raws=len(raws),
-        n_groups=len(groups),
-        n_llm_merges=n_merge_calls,
+        raws_total=len(raws),
+        groups_total=len(groups),
+        merges_total=total_merges,
     )
     s = get_settings()
     out: list[ConsolidatedInsight] = []
-    merge_i = 0
-    t0 = time.monotonic()
+    merge_num = 0
+    stage_d_t0 = time.monotonic()
     for (category, canon), members in groups.items():
         members.sort(key=lambda r: r.extracted_at)
         confidence = max(r.confidence for r in members)
@@ -129,7 +129,7 @@ async def consolidate(
         session_ids = list({r.session_id for r in members})
 
         if len(members) >= 3:
-            merge_i += 1
+            merge_num += 1
             obs_block = "\n".join(
                 f"- [{r.extracted_at:%Y-%m-%d}] (conf={r.confidence:.2f}) {r.text}" for r in members
             )
@@ -149,12 +149,12 @@ async def consolidate(
             text, trajectory = _split_consolidation(response)
             log.info(
                 "insights_merge_done",
-                i=merge_i,
-                n=n_merge_calls,
+                merge_num=merge_num,
+                total_merges=total_merges,
                 category=category,
                 subject=canon,
-                n_members=len(members),
-                total_s=round(time.monotonic() - t0, 1),
+                group_size=len(members),
+                stage_d_elapsed_s=round(time.monotonic() - stage_d_t0, 1),
             )
         else:
             best = max(members, key=lambda r: r.confidence)

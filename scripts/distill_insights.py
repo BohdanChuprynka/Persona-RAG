@@ -107,52 +107,52 @@ async def main_async(args: argparse.Namespace) -> int:
     ]
     log.info(
         "insights_stage_c_start",
-        n_to_process=len(to_process),
-        n_skipped=len(high) - len(to_process),
+        sessions_to_process=len(to_process),
+        sessions_skipped=len(high) - len(to_process),
     )
     raws: list = []
-    n_ok = 0
-    n_failed = 0
-    t0 = time.monotonic()
-    for i, session in enumerate(to_process, start=1):
-        s_t0 = time.monotonic()
+    successes = 0
+    failures = 0
+    run_t0 = time.monotonic()
+    for session_num, session in enumerate(to_process, start=1):
+        session_t0 = time.monotonic()
         try:
             extracted = await extract_from_session(
                 session, persona_name=settings.PERSONA_NAME, entity_hints=entity_hints
             )
             raws.extend(extracted)
             _mark_session_extracted(session.session_id, len(extracted))
-            n_ok += 1
+            successes += 1
             log.info(
                 "insights_session_done",
-                i=i,
-                n=len(to_process),
+                session_num=session_num,
+                total_sessions=len(to_process),
                 session_id=session.session_id,
-                n_insights=len(extracted),
-                cumulative_raws=len(raws),
-                ok=n_ok,
-                failed=n_failed,
-                elapsed_s=round(time.monotonic() - s_t0, 2),
-                total_s=round(time.monotonic() - t0, 1),
+                insights_extracted=len(extracted),
+                raws_total=len(raws),
+                successes=successes,
+                failures=failures,
+                session_elapsed_s=round(time.monotonic() - session_t0, 2),
+                run_elapsed_s=round(time.monotonic() - run_t0, 1),
             )
         except Exception as e:
-            n_failed += 1
+            failures += 1
             log.warning(
                 "insights_session_failed",
-                i=i,
-                n=len(to_process),
+                session_num=session_num,
+                total_sessions=len(to_process),
                 session_id=session.session_id,
                 error=str(e)[:300],
-                ok=n_ok,
-                failed=n_failed,
+                successes=successes,
+                failures=failures,
             )
             _mark_session_failed(session.session_id, str(e))
     log.info(
         "insights_stage_c_done",
-        n_raw=len(raws),
-        n_ok=n_ok,
-        n_failed=n_failed,
-        total_s=round(time.monotonic() - t0, 1),
+        raws_total=len(raws),
+        successes=successes,
+        failures=failures,
+        run_elapsed_s=round(time.monotonic() - run_t0, 1),
     )
 
     # Stage D — consolidate
