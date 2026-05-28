@@ -34,11 +34,18 @@ def test_insights_settings_defaults(monkeypatch, tmp_path):
     for k in list(os.environ):
         if k.startswith("INSIGHTS_") or k == "QDRANT_INSIGHTS_COLLECTION":
             monkeypatch.delenv(k, raising=False)
-    # need minimum required vars; reuse the existing conftest seed
+    # seed required fields via process env so we can disable dotenv loading
+    # (the project .env or a worktree .env must NOT influence default checks).
+    monkeypatch.setenv("PERSONA_NAME", "TestPerson")
+    monkeypatch.setenv("PERSONA_LANGUAGE", "en")
+    monkeypatch.setenv("PERSONA_DESCRIPTION", "test")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "test-token")
+    monkeypatch.setenv("ADMIN_TELEGRAM_ID", "1")
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
     from persona_rag.config import Settings, get_settings
 
     get_settings.cache_clear()
-    s = Settings()
+    s = Settings(_env_file=None)
     assert s.INSIGHTS_ENABLED is True
     assert s.INSIGHTS_EXTRACT_MODEL == "gpt-4o"
     assert s.INSIGHTS_CONSOLIDATE_MODEL == "gpt-4o-mini"
