@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import random
 from typing import Any
 
 from persona_rag.config import get_settings
@@ -18,17 +19,28 @@ def attach_bot(bot: Any) -> None:
 def _split_reply(reply: str) -> list[str]:
     """Split a reply on newlines so each fragment becomes a separate Telegram
     message — mirrors how Bohdan actually chats. Empty fragments dropped.
+
+    Robust to models that emit the literal two-char sequence ``\\n`` (the
+    prompt previously asked for "\\n" so older traces show this), as well
+    as ``\\r\\n`` line endings.
     """
     if not get_settings().REPLY_SPLIT_NEWLINES:
         return [reply] if reply else []
-    chunks = [c.strip() for c in reply.split("\n")]
+    normalized = reply.replace("\\n", "\n").replace("\r\n", "\n")
+    chunks = [c.strip() for c in normalized.split("\n")]
     return [c for c in chunks if c]
 
 
 def _typing_delay_ms(chunk: str) -> int:
+    """Per-chunk delay with random jitter so consecutive messages don't pulse
+    at machine-precise intervals."""
     s = get_settings()
     raw = s.REPLY_CHUNK_DELAY_BASE_MS + len(chunk) * s.REPLY_CHUNK_DELAY_PER_CHAR_MS
-    return min(raw, s.REPLY_CHUNK_DELAY_MAX_MS)
+    capped = min(raw, s.REPLY_CHUNK_DELAY_MAX_MS)
+    jitter = max(0.0, min(s.REPLY_CHUNK_DELAY_JITTER_PCT, 0.95))
+    if jitter > 0:
+        capped = int(capped * random.uniform(1 - jitter, 1 + jitter))
+    return max(0, capped)
 
 
 async def send_reply(state: GraphState) -> GraphState:

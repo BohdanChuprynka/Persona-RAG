@@ -27,6 +27,49 @@ def test_split_empty():
     assert _split_reply("") == []
 
 
+def test_split_literal_backslash_n_is_normalized():
+    """Regression: the prompt used to ask for "\\n" so the model output it
+    as the two-char escape sequence instead of a real newline. Splitter
+    must normalise to actual newlines before splitting."""
+    raw = "хз де я\\nдесь валяюсь як завжди"
+    assert _split_reply(raw) == ["хз де я", "десь валяюсь як завжди"]
+
+
+def test_split_crlf_normalized():
+    assert _split_reply("a\r\nb") == ["a", "b"]
+
+
+def test_typing_delay_jitter_within_bounds(monkeypatch):
+    """JITTER_PCT=0.5 means delay lands within +/-50% of the deterministic
+    base for any random.uniform draw."""
+    from persona_rag.graph.nodes.send_reply import _typing_delay_ms
+
+    samples = [_typing_delay_ms("a" * 10) for _ in range(50)]
+    # Base = 300 + 10*20 = 500ms, capped at MAX=1800ms (so 500). Jitter 0.5
+    # means range [250, 750].
+    assert all(250 <= s <= 750 for s in samples)
+    # And there is *some* spread (essentially zero chance all 50 collide).
+    assert len(set(samples)) > 1
+
+
+def test_typing_delay_jitter_zero_is_deterministic(monkeypatch):
+    """JITTER_PCT=0.0 reproduces the old deterministic behaviour."""
+    from persona_rag.graph.nodes.send_reply import _typing_delay_ms
+
+    class FakeSettings:
+        REPLY_CHUNK_DELAY_BASE_MS = 300
+        REPLY_CHUNK_DELAY_PER_CHAR_MS = 20
+        REPLY_CHUNK_DELAY_MAX_MS = 1800
+        REPLY_CHUNK_DELAY_JITTER_PCT = 0.0
+
+    monkeypatch.setattr(
+        "persona_rag.graph.nodes.send_reply.get_settings",
+        lambda: FakeSettings(),
+    )
+    # 300 + 10*20 = 500, no jitter, no cap hit -> exactly 500
+    assert _typing_delay_ms("a" * 10) == 500
+
+
 @pytest.mark.asyncio
 async def test_send_reply_emits_one_message_per_line(monkeypatch):
     monkeypatch.setattr(sr_mod, "asyncio", _FastAsyncio())  # zero out sleep

@@ -80,6 +80,10 @@ class Settings(BaseSettings):
     REPLY_CHUNK_DELAY_BASE_MS: int = 300
     REPLY_CHUNK_DELAY_PER_CHAR_MS: int = 20
     REPLY_CHUNK_DELAY_MAX_MS: int = 1800
+    # Random pause variance between messages: 0.0 = deterministic,
+    # 0.5 = +/-50% (e.g. 800ms base becomes a uniform draw in 400..1200ms).
+    # Caps at 0.95 internally to avoid 0ms delays.
+    REPLY_CHUNK_DELAY_JITTER_PCT: float = 0.5
 
     # Conversation state
     CURRENT_SESSION_WINDOW: int = 10
