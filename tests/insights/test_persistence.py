@@ -374,6 +374,53 @@ def test_persist_raws_replaces_prior_session_raws(tmp_path, monkeypatch):
     assert state.insights_count == 1
 
 
+def test_load_resume_state_returns_skip_ids_and_raws(tmp_path, monkeypatch):
+    """In incremental mode, _load_resume_state hydrates raws from DB for already-done sessions."""
+    db_path = str(tmp_path / "p.db")
+    monkeypatch.setattr(
+        "scripts.distill_insights.make_engine",
+        lambda: make_engine(db_path),
+    )
+    from scripts.distill_insights import _load_resume_state, _persist_raws_and_mark
+
+    # Two completed sessions with persisted raws
+    _persist_raws_and_mark("s1", [_raw("s1", subject="a"), _raw("s1", subject="b")])
+    _persist_raws_and_mark("s2", [_raw("s2", subject="c")])
+    # One previously-failed session — should NOT be skipped (so it retries)
+    with Session(make_engine(db_path)) as s:
+        s.add(
+            InsightRunState(
+                session_id="s-failed",
+                last_extracted_at=datetime.now(UTC),
+                insights_count=0,
+                failed=True,
+                error_message="boom",
+            )
+        )
+        s.commit()
+
+    skip_ids, resumed = _load_resume_state(mode="incremental")
+    assert skip_ids == {"s1", "s2"}
+    assert "s-failed" not in skip_ids
+    assert len(resumed) == 3
+    assert {r.subject for r in resumed} == {"a", "b", "c"}
+
+
+def test_load_resume_state_full_mode_returns_empty(tmp_path, monkeypatch):
+    """In --mode full, resume state is bypassed entirely (truncation handles the rest)."""
+    db_path = str(tmp_path / "p.db")
+    monkeypatch.setattr(
+        "scripts.distill_insights.make_engine",
+        lambda: make_engine(db_path),
+    )
+    from scripts.distill_insights import _load_resume_state, _persist_raws_and_mark
+
+    _persist_raws_and_mark("s1", [_raw("s1")])
+    skip_ids, resumed = _load_resume_state(mode="full")
+    assert skip_ids == set()
+    assert resumed == []
+
+
 def test_persist_raws_empty_list_still_marks_session(tmp_path, monkeypatch):
     """If extractor returns zero raws (low-signal session), still mark the session done.
 

@@ -96,12 +96,15 @@ async def main_async(args: argparse.Namespace) -> int:
     if args.mode == "reconsolidate":
         return await _reconsolidate_only(settings)
 
-    # Stage C — extract (skip already-done sessions in incremental mode)
-    skip_ids: set[str] = set()
-    if args.mode == "incremental":
-        with Session(make_engine()) as s:
-            for row in s.exec(select(InsightRunState).where(InsightRunState.failed == False)).all():  # noqa: E712
-                skip_ids.add(row.session_id)
+    # Stage C — extract. In incremental mode, hydrate raws from DB for sessions
+    # that completed on a prior run so a downstream crash never costs us those
+    # extractions a second time.
+    skip_ids, resumed_raws = _load_resume_state(mode=args.mode)
+    log.info(
+        "insights_stage_c_resumed",
+        sessions_resumed=len(skip_ids),
+        raws_loaded=len(resumed_raws),
+    )
 
     to_process = [
         s for s in high if s.session_id not in skip_ids or args.force_session == s.session_id
@@ -111,7 +114,7 @@ async def main_async(args: argparse.Namespace) -> int:
         sessions_to_process=len(to_process),
         sessions_skipped=len(high) - len(to_process),
     )
-    raws: list = []
+    raws: list[RawInsight] = list(resumed_raws)
     successes = 0
     failures = 0
     run_t0 = time.monotonic()
@@ -191,6 +194,35 @@ async def main_async(args: argparse.Namespace) -> int:
         n_pending=sum(1 for v in statuses.values() if v == "pending"),
     )
     return 0
+
+
+def _load_resume_state(*, mode: str) -> tuple[set[str], list[RawInsight]]:
+    """Return (skip_ids, resumed_raws) for the current run mode.
+
+    Incremental: skip sessions whose InsightRunState.failed=False and load their
+    raws from raw_insight back into memory. Stage D then sees a union of
+    (resumed) + (newly extracted) raws — identical to the no-crash baseline.
+
+    Any other mode (full, dry-run, reembed, reconsolidate): return empties. Full
+    has already truncated; the rest don't go through Stage C.
+    """
+    if mode != "incremental":
+        return set(), []
+    with Session(make_engine()) as s:
+        done = list(
+            s.exec(
+                select(InsightRunState).where(InsightRunState.failed == False)  # noqa: E712
+            ).all()
+        )
+        skip_ids = {r.session_id for r in done}
+        if not skip_ids:
+            return set(), []
+        persisted = list(
+            s.exec(
+                select(RawInsightRow).where(RawInsightRow.session_id.in_(skip_ids))  # type: ignore[attr-defined]
+            ).all()
+        )
+    return skip_ids, [_raw_from_row(r) for r in persisted]
 
 
 def _row_from_raw(raw: RawInsight) -> RawInsightRow:
