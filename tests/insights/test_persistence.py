@@ -7,8 +7,9 @@ import pytest
 from sqlmodel import Session, select
 
 from persona_rag.db.engine import make_engine
-from persona_rag.db.models import AlgoSignal, InsightRow
+from persona_rag.db.models import AlgoSignal, InsightRow, InsightRunState, RawInsightRow
 from persona_rag.insights.consolidator import ConsolidatedInsight
+from persona_rag.insights.extractor import RawInsight
 from persona_rag.insights.persistence import (
     persist_algo_signals,
     persist_insights,
@@ -302,3 +303,97 @@ async def test_persist_insights_updates_auto_in_place(tmp_path, monkeypatch):
     assert row.trajectory == "active 2024 → present"
     # Qdrant upserted (auto stays embeddable)
     fake_client.upsert.assert_called_once()
+
+
+# --- Stage C checkpointing: _persist_raws_and_mark ---
+# See docs/superpowers/specs/2026-05-26-stage-c-checkpointing-design.md.
+
+
+def _raw(session_id: str, subject: str = "x", text: str = "t", conf: float = 0.5) -> RawInsight:
+    return RawInsight(
+        session_id=session_id,
+        category="bio",
+        subject=subject,
+        text=text,
+        confidence=conf,
+        source_quote="q",
+        extracted_at=datetime.now(UTC),
+    )
+
+
+def test_persist_raws_atomic_with_runstate(tmp_path, monkeypatch):
+    """One transaction writes raws AND marks InsightRunState — neither lands without the other."""
+    db_path = str(tmp_path / "p.db")
+    monkeypatch.setattr(
+        "scripts.distill_insights.make_engine",
+        lambda: make_engine(db_path),
+    )
+    from scripts.distill_insights import _persist_raws_and_mark
+
+    raws = [_raw("s1", subject="a"), _raw("s1", subject="b")]
+    _persist_raws_and_mark("s1", raws)
+
+    with Session(make_engine(db_path)) as s:
+        persisted = list(
+            s.exec(select(RawInsightRow).where(RawInsightRow.session_id == "s1")).all()
+        )
+        state = s.get(InsightRunState, "s1")
+    assert len(persisted) == 2
+    assert {r.subject for r in persisted} == {"a", "b"}
+    assert state is not None
+    assert state.failed is False
+    assert state.insights_count == 2
+
+
+def test_persist_raws_replaces_prior_session_raws(tmp_path, monkeypatch):
+    """Re-calling for the same session deletes the old raws so Stage D never sees duplicates.
+
+    This is what makes --force-session safe even when raws were persisted on a prior run.
+    """
+    db_path = str(tmp_path / "p.db")
+    monkeypatch.setattr(
+        "scripts.distill_insights.make_engine",
+        lambda: make_engine(db_path),
+    )
+    from scripts.distill_insights import _persist_raws_and_mark
+
+    # First call persists 3 raws
+    _persist_raws_and_mark("s1", [_raw("s1", subject=c) for c in ("a", "b", "c")])
+    # Second call with 1 raw must REPLACE, not append
+    _persist_raws_and_mark("s1", [_raw("s1", subject="z", text="new")])
+
+    with Session(make_engine(db_path)) as s:
+        persisted = list(
+            s.exec(select(RawInsightRow).where(RawInsightRow.session_id == "s1")).all()
+        )
+        state = s.get(InsightRunState, "s1")
+    assert len(persisted) == 1
+    assert persisted[0].subject == "z"
+    assert persisted[0].text == "new"
+    assert state is not None
+    assert state.insights_count == 1
+
+
+def test_persist_raws_empty_list_still_marks_session(tmp_path, monkeypatch):
+    """If extractor returns zero raws (low-signal session), still mark the session done.
+
+    Otherwise it'd get re-extracted on every incremental run forever.
+    """
+    db_path = str(tmp_path / "p.db")
+    monkeypatch.setattr(
+        "scripts.distill_insights.make_engine",
+        lambda: make_engine(db_path),
+    )
+    from scripts.distill_insights import _persist_raws_and_mark
+
+    _persist_raws_and_mark("s-empty", [])
+
+    with Session(make_engine(db_path)) as s:
+        rows = list(
+            s.exec(select(RawInsightRow).where(RawInsightRow.session_id == "s-empty")).all()
+        )
+        state = s.get(InsightRunState, "s-empty")
+    assert rows == []
+    assert state is not None
+    assert state.failed is False
+    assert state.insights_count == 0

@@ -21,11 +21,12 @@ from persona_rag.db.models import (
     InsightRow,
     InsightRunState,
     PersonaTurnRow,
+    RawInsightRow,
 )
 from persona_rag.index.qdrant_store import ensure_insights_collection, make_client
 from persona_rag.insights.algo import run_stage_a
 from persona_rag.insights.consolidator import consolidate, load_synonyms
-from persona_rag.insights.extractor import extract_from_session
+from persona_rag.insights.extractor import RawInsight, extract_from_session
 from persona_rag.insights.persistence import (
     persist_algo_signals,
     persist_insights,
@@ -120,8 +121,8 @@ async def main_async(args: argparse.Namespace) -> int:
             extracted = await extract_from_session(
                 session, persona_name=settings.PERSONA_NAME, entity_hints=entity_hints
             )
+            _persist_raws_and_mark(session.session_id, extracted)
             raws.extend(extracted)
-            _mark_session_extracted(session.session_id, len(extracted))
             successes += 1
             log.info(
                 "insights_session_done",
@@ -192,8 +193,50 @@ async def main_async(args: argparse.Namespace) -> int:
     return 0
 
 
-def _mark_session_extracted(session_id: str, n_insights: int) -> None:
+def _row_from_raw(raw: RawInsight) -> RawInsightRow:
+    return RawInsightRow(
+        session_id=raw.session_id,
+        category=raw.category,
+        subject=raw.subject,
+        text=raw.text,
+        confidence=raw.confidence,
+        source_quote=raw.source_quote,
+        extracted_at=raw.extracted_at,
+    )
+
+
+def _raw_from_row(row: RawInsightRow) -> RawInsight:
+    return RawInsight(
+        session_id=row.session_id,
+        category=row.category,
+        subject=row.subject,
+        text=row.text,
+        confidence=row.confidence,
+        source_quote=row.source_quote,
+        extracted_at=row.extracted_at,
+    )
+
+
+def _persist_raws_and_mark(session_id: str, raws: list[RawInsight]) -> None:
+    """Atomically persist raws AND mark the session done in one transaction.
+
+    Stage C checkpoint: if the process dies between the LLM call and this commit,
+    nothing lands — the session is re-extracted on the next run. If commit
+    succeeds, both raws and InsightRunState are durable, so resume can load the
+    raws back into memory without recharging the LLM.
+
+    Replaces the old _mark_session_extracted helper.
+    """
     with Session(make_engine()) as s:
+        # Defense-in-depth: drop any prior raws for this session. Handles
+        # --force-session and any unexpected re-entry. New runs almost always
+        # see an empty result here, so this is a no-op on the happy path.
+        for old in s.exec(
+            select(RawInsightRow).where(RawInsightRow.session_id == session_id)
+        ).all():
+            s.delete(old)
+        for raw in raws:
+            s.add(_row_from_raw(raw))
         row = s.get(InsightRunState, session_id)
         now = datetime.now(UTC)
         if row is None:
@@ -201,13 +244,13 @@ def _mark_session_extracted(session_id: str, n_insights: int) -> None:
                 InsightRunState(
                     session_id=session_id,
                     last_extracted_at=now,
-                    insights_count=n_insights,
+                    insights_count=len(raws),
                     failed=False,
                 )
             )
         else:
             row.last_extracted_at = now
-            row.insights_count = n_insights
+            row.insights_count = len(raws)
             row.failed = False
             row.error_message = None
             s.add(row)
