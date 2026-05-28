@@ -61,7 +61,11 @@ class Settings(BaseSettings):
     STRIP_URLS: bool = False
 
     # Retrieval
-    TOP_K: int = 8
+    TOP_K: int = 4
+    # Drop retrieved turns whose final hybrid score is below this floor.
+    # Stops weak past-turn matches from feeding vocabulary into the prompt
+    # that the model then parrots out of context. 0.0 disables.
+    HYBRID_SCORE_FLOOR: float = 0.15
     RECENCY_HALF_LIFE_DAYS: int = 180
     HYBRID_DENSE_ALPHA: float = Field(default=0.7, ge=0.0, le=1.0)
 

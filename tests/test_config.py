@@ -25,7 +25,8 @@ def test_settings_load_from_env(monkeypatch, tmp_path):
     s = Settings(_env_file=str(env))
     assert s.PERSONA_NAME == "TestPerson"
     assert s.ADMIN_TELEGRAM_ID == 12345
-    assert s.TOP_K == 8  # default
+    assert s.TOP_K == 4  # default
+    assert s.HYBRID_SCORE_FLOOR == 0.15  # default
     assert s.HYBRID_DENSE_ALPHA == 0.7  # default
 
 

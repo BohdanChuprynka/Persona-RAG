@@ -25,4 +25,9 @@ async def retrieve(
     bm25 = retrieve_bm25(query, top_k=pool)
     fused = fuse_scores(dense, bm25, alpha=alpha, top_k=pool)
     reranked = recency_decay(fused)
+    # Score floor stops weak matches from leaking into the prompt; the model
+    # tends to parrot vocabulary from any retrieved turn, useful or not.
+    floor = s.HYBRID_SCORE_FLOOR
+    if floor > 0:
+        reranked = [r for r in reranked if r.score >= floor]
     return reranked[:k]
