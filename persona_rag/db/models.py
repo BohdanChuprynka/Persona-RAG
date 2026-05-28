@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from datetime import datetime
 
 from sqlmodel import Field, SQLModel
@@ -116,6 +117,27 @@ class InsightRunState(SQLModel, table=True):
     insights_count: int
     failed: bool = False
     error_message: str | None = None
+
+
+class RawInsightRow(SQLModel, table=True):
+    """Stage C checkpoint table — one row per LLM-extracted raw insight.
+
+    Persisted atomically alongside InsightRunState in each Stage C iteration so
+    that a crash anywhere downstream (Stage D, E, F) leaves the extracted raws
+    recoverable on the next incremental run. See
+    docs/superpowers/specs/2026-05-26-stage-c-checkpointing-design.md.
+    """
+
+    __tablename__ = "raw_insight"
+
+    id: str = Field(default_factory=lambda: uuid.uuid4().hex, primary_key=True)
+    session_id: str = Field(index=True)
+    category: str  # bio | opinion | interest | behavior
+    subject: str  # raw, NOT normalized
+    text: str
+    confidence: float
+    source_quote: str
+    extracted_at: datetime
 
 
 class VerificationSession(SQLModel, table=True):
