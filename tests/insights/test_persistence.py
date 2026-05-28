@@ -406,6 +406,30 @@ def test_load_resume_state_returns_skip_ids_and_raws(tmp_path, monkeypatch):
     assert {r.subject for r in resumed} == {"a", "b", "c"}
 
 
+def test_full_truncate_clears_raw_insight(tmp_path, monkeypatch):
+    """_full_truncate must wipe raw_insight along with the other three tables,
+    otherwise stale raws would leak into Stage D on the next --mode full run."""
+    db_path = str(tmp_path / "p.db")
+    monkeypatch.setattr(
+        "scripts.distill_insights.make_engine",
+        lambda: make_engine(db_path),
+    )
+    from scripts.distill_insights import _full_truncate, _persist_raws_and_mark
+
+    _persist_raws_and_mark("s1", [_raw("s1"), _raw("s1")])
+    _persist_raws_and_mark("s2", [_raw("s2")])
+    # Sanity: 3 raws + 2 run_state rows before truncate
+    with Session(make_engine(db_path)) as s:
+        assert len(list(s.exec(select(RawInsightRow)).all())) == 3
+        assert len(list(s.exec(select(InsightRunState)).all())) == 2
+
+    _full_truncate()
+
+    with Session(make_engine(db_path)) as s:
+        assert list(s.exec(select(RawInsightRow)).all()) == []
+        assert list(s.exec(select(InsightRunState)).all()) == []
+
+
 def test_load_resume_state_full_mode_returns_empty(tmp_path, monkeypatch):
     """In --mode full, resume state is bypassed entirely (truncation handles the rest)."""
     db_path = str(tmp_path / "p.db")

@@ -42,9 +42,13 @@ def _default_synonyms_path() -> Path:
 
 
 def _full_truncate() -> None:
-    """Wipe insight tables for a clean rebuild."""
+    """Wipe insight tables for a clean rebuild.
+
+    Includes raw_insight so that the Stage C checkpoint table starts empty
+    too — otherwise a prior partial run's raws would leak into Stage D.
+    """
     with Session(make_engine()) as s:
-        for tbl in (InsightRow, InsightRunState, AlgoSignal):
+        for tbl in (InsightRow, InsightRunState, AlgoSignal, RawInsightRow):
             for row in s.exec(select(tbl)).all():
                 s.delete(row)
         s.commit()
