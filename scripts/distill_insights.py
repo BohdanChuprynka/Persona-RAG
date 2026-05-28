@@ -21,11 +21,12 @@ from persona_rag.db.models import (
     InsightRow,
     InsightRunState,
     PersonaTurnRow,
+    RawInsightRow,
 )
 from persona_rag.index.qdrant_store import ensure_insights_collection, make_client
 from persona_rag.insights.algo import run_stage_a
 from persona_rag.insights.consolidator import consolidate, load_synonyms
-from persona_rag.insights.extractor import extract_from_session
+from persona_rag.insights.extractor import RawInsight, extract_from_session
 from persona_rag.insights.persistence import (
     persist_algo_signals,
     persist_insights,
@@ -41,9 +42,13 @@ def _default_synonyms_path() -> Path:
 
 
 def _full_truncate() -> None:
-    """Wipe insight tables for a clean rebuild."""
+    """Wipe insight tables for a clean rebuild.
+
+    Includes raw_insight so that the Stage C checkpoint table starts empty
+    too — otherwise a prior partial run's raws would leak into Stage D.
+    """
     with Session(make_engine()) as s:
-        for tbl in (InsightRow, InsightRunState, AlgoSignal):
+        for tbl in (InsightRow, InsightRunState, AlgoSignal, RawInsightRow):
             for row in s.exec(select(tbl)).all():
                 s.delete(row)
         s.commit()
@@ -95,12 +100,15 @@ async def main_async(args: argparse.Namespace) -> int:
     if args.mode == "reconsolidate":
         return await _reconsolidate_only(settings)
 
-    # Stage C — extract (skip already-done sessions in incremental mode)
-    skip_ids: set[str] = set()
-    if args.mode == "incremental":
-        with Session(make_engine()) as s:
-            for row in s.exec(select(InsightRunState).where(InsightRunState.failed == False)).all():  # noqa: E712
-                skip_ids.add(row.session_id)
+    # Stage C — extract. In incremental mode, hydrate raws from DB for sessions
+    # that completed on a prior run so a downstream crash never costs us those
+    # extractions a second time.
+    skip_ids, resumed_raws = _load_resume_state(mode=args.mode)
+    log.info(
+        "insights_stage_c_resumed",
+        sessions_resumed=len(skip_ids),
+        raws_loaded=len(resumed_raws),
+    )
 
     to_process = [
         s for s in high if s.session_id not in skip_ids or args.force_session == s.session_id
@@ -110,7 +118,7 @@ async def main_async(args: argparse.Namespace) -> int:
         sessions_to_process=len(to_process),
         sessions_skipped=len(high) - len(to_process),
     )
-    raws: list = []
+    raws: list[RawInsight] = list(resumed_raws)
     successes = 0
     failures = 0
     run_t0 = time.monotonic()
@@ -120,8 +128,8 @@ async def main_async(args: argparse.Namespace) -> int:
             extracted = await extract_from_session(
                 session, persona_name=settings.PERSONA_NAME, entity_hints=entity_hints
             )
+            _persist_raws_and_mark(session.session_id, extracted)
             raws.extend(extracted)
-            _mark_session_extracted(session.session_id, len(extracted))
             successes += 1
             log.info(
                 "insights_session_done",
@@ -192,8 +200,79 @@ async def main_async(args: argparse.Namespace) -> int:
     return 0
 
 
-def _mark_session_extracted(session_id: str, n_insights: int) -> None:
+def _load_resume_state(*, mode: str) -> tuple[set[str], list[RawInsight]]:
+    """Return (skip_ids, resumed_raws) for the current run mode.
+
+    Incremental: skip sessions whose InsightRunState.failed=False and load their
+    raws from raw_insight back into memory. Stage D then sees a union of
+    (resumed) + (newly extracted) raws — identical to the no-crash baseline.
+
+    Any other mode (full, dry-run, reembed, reconsolidate): return empties. Full
+    has already truncated; the rest don't go through Stage C.
+    """
+    if mode != "incremental":
+        return set(), []
     with Session(make_engine()) as s:
+        done = list(
+            s.exec(
+                select(InsightRunState).where(InsightRunState.failed == False)  # noqa: E712
+            ).all()
+        )
+        skip_ids = {r.session_id for r in done}
+        if not skip_ids:
+            return set(), []
+        persisted = list(
+            s.exec(
+                select(RawInsightRow).where(RawInsightRow.session_id.in_(skip_ids))  # type: ignore[attr-defined]
+            ).all()
+        )
+    return skip_ids, [_raw_from_row(r) for r in persisted]
+
+
+def _row_from_raw(raw: RawInsight) -> RawInsightRow:
+    return RawInsightRow(
+        session_id=raw.session_id,
+        category=raw.category,
+        subject=raw.subject,
+        text=raw.text,
+        confidence=raw.confidence,
+        source_quote=raw.source_quote,
+        extracted_at=raw.extracted_at,
+    )
+
+
+def _raw_from_row(row: RawInsightRow) -> RawInsight:
+    return RawInsight(
+        session_id=row.session_id,
+        category=row.category,
+        subject=row.subject,
+        text=row.text,
+        confidence=row.confidence,
+        source_quote=row.source_quote,
+        extracted_at=row.extracted_at,
+    )
+
+
+def _persist_raws_and_mark(session_id: str, raws: list[RawInsight]) -> None:
+    """Atomically persist raws AND mark the session done in one transaction.
+
+    Stage C checkpoint: if the process dies between the LLM call and this commit,
+    nothing lands — the session is re-extracted on the next run. If commit
+    succeeds, both raws and InsightRunState are durable, so resume can load the
+    raws back into memory without recharging the LLM.
+
+    Replaces the old _mark_session_extracted helper.
+    """
+    with Session(make_engine()) as s:
+        # Defense-in-depth: drop any prior raws for this session. Handles
+        # --force-session and any unexpected re-entry. New runs almost always
+        # see an empty result here, so this is a no-op on the happy path.
+        for old in s.exec(
+            select(RawInsightRow).where(RawInsightRow.session_id == session_id)
+        ).all():
+            s.delete(old)
+        for raw in raws:
+            s.add(_row_from_raw(raw))
         row = s.get(InsightRunState, session_id)
         now = datetime.now(UTC)
         if row is None:
@@ -201,13 +280,13 @@ def _mark_session_extracted(session_id: str, n_insights: int) -> None:
                 InsightRunState(
                     session_id=session_id,
                     last_extracted_at=now,
-                    insights_count=n_insights,
+                    insights_count=len(raws),
                     failed=False,
                 )
             )
         else:
             row.last_extracted_at = now
-            row.insights_count = n_insights
+            row.insights_count = len(raws)
             row.failed = False
             row.error_message = None
             s.add(row)
