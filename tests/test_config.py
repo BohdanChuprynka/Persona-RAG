@@ -46,7 +46,8 @@ def test_insights_settings_defaults(monkeypatch, tmp_path):
     assert s.INSIGHTS_MIN_SESSION_TURNS == 10
     assert s.INSIGHTS_MIN_SESSION_CHARS == 300
     assert s.INSIGHTS_MAX_SESSIONS == 600
-    assert s.INSIGHTS_TOP_K_SEMANTIC == 3
+    assert s.INSIGHTS_TOP_K_SEMANTIC == 6
+    assert s.INSIGHTS_MIN_SCORE_FLOOR == 0.2
     assert s.INSIGHTS_TOP_N_STATIC == 5
     assert s.INSIGHTS_CONFIDENCE_THRESHOLD == 0.7
     assert s.INSIGHTS_MIN_EVIDENCE == 2

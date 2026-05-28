@@ -49,3 +49,70 @@ async def test_retrieve_insights_pulls_pool_then_reranks(monkeypatch):
     cond = qfilter.must[0]
     assert cond.key == "review_status"
     assert set(cond.match.any) == {"auto", "approved"}
+
+
+@pytest.mark.asyncio
+async def test_retrieve_insights_drops_below_score_floor(monkeypatch):
+    """Insights with final_score below INSIGHTS_MIN_SCORE_FLOOR are filtered out."""
+    from datetime import UTC, datetime
+
+    from persona_rag.insights.recency import RankedInsight
+
+    now = datetime.now(UTC)
+    high = RankedInsight(
+        id="aaa",
+        category="bio",
+        subject="school",
+        text="goes to school",
+        confidence=1.0,
+        evidence_count=5,
+        earliest_date=now,
+        latest_date=now,
+        trajectory=None,
+        source="chat",
+        semantic_score=0.5,
+        final_score=0.5,
+    )
+    weak = RankedInsight(
+        id="bbb",
+        category="opinion",
+        subject="snow",
+        text="dislikes snow",
+        confidence=0.5,
+        evidence_count=1,
+        earliest_date=now,
+        latest_date=now,
+        trajectory=None,
+        source="chat",
+        semantic_score=0.1,
+        final_score=0.1,
+    )
+
+    fake_client = MagicMock()
+    fake_resp = MagicMock()
+    fake_resp.points = ["high_point", "weak_point"]  # opaque — from_qdrant_point is mocked
+    fake_client.query_points = MagicMock(return_value=fake_resp)
+
+    monkeypatch.setattr(
+        "persona_rag.graph.nodes.retrieve_insights.make_client",
+        lambda: fake_client,
+    )
+    monkeypatch.setattr(
+        "persona_rag.graph.nodes.retrieve_insights.from_qdrant_point",
+        lambda p: high if p == "high_point" else weak,
+    )
+    # Bypass the recency decay so final_score stays = semantic_score as seeded above.
+    monkeypatch.setattr(
+        "persona_rag.graph.nodes.retrieve_insights.rerank_with_recency",
+        lambda items, half_life_days: sorted(items, key=lambda x: x.final_score, reverse=True),
+    )
+
+    with patch(
+        "persona_rag.graph.nodes.retrieve_insights.embed_batch",
+        AsyncMock(return_value=[[0.0] * 1536]),
+    ):
+        out = await retrieve_insights({"user_id": 1, "chat_id": 1, "incoming": "hi"})
+
+    subjects = [r.subject for r in out["insights"]["semantic"]]
+    assert "school" in subjects  # final_score=0.5 >= floor 0.2 -> keep
+    assert "snow" not in subjects  # final_score=0.1 < floor 0.2 -> drop

@@ -66,7 +66,7 @@ class Settings(BaseSettings):
     HYBRID_DENSE_ALPHA: float = Field(default=0.7, ge=0.0, le=1.0)
 
     # Generation
-    MAX_REPLY_TOKENS: int = 300
+    MAX_REPLY_TOKENS: int = 500
     TEMPERATURE: float = 0.8
     ENABLE_PROMPT_CACHING: bool = True
     # Real chat behavior: split replies on \n and send each fragment as
@@ -101,7 +101,11 @@ class Settings(BaseSettings):
     INSIGHTS_MIN_SESSION_TURNS: int = 10
     INSIGHTS_MIN_SESSION_CHARS: int = 300
     INSIGHTS_MAX_SESSIONS: int = 600
-    INSIGHTS_TOP_K_SEMANTIC: int = 3
+    INSIGHTS_TOP_K_SEMANTIC: int = 6
+    # Minimum recency-aware score for a retrieved insight to be rendered into
+    # the prompt. Drops weak matches that would otherwise leak in when K is
+    # bumped. 0.0 disables.
+    INSIGHTS_MIN_SCORE_FLOOR: float = 0.2
     INSIGHTS_TOP_N_STATIC: int = 5
     INSIGHTS_CONFIDENCE_THRESHOLD: float = 0.7
     INSIGHTS_MIN_EVIDENCE: int = 2

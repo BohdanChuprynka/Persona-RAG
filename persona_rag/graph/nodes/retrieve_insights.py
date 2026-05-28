@@ -44,6 +44,11 @@ async def retrieve_insights(state: GraphState) -> GraphState:
         )
         candidates = [from_qdrant_point(p) for p in response.points]
         reranked = rerank_with_recency(candidates, half_life_days=s.INSIGHTS_RECENCY_HALF_LIFE_DAYS)
+        # Apply minimum score floor first, then take top-K from what survives.
+        # Keeps strong matches even if K is bumped; weak matches don't leak in.
+        floor = s.INSIGHTS_MIN_SCORE_FLOOR
+        if floor > 0:
+            reranked = [r for r in reranked if r.final_score >= floor]
         semantic = reranked[: s.INSIGHTS_TOP_K_SEMANTIC]
 
         static = (
