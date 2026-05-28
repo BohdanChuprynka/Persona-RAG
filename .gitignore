@@ -80,3 +80,6 @@ logs/
 # Docker volumes (if mounted into repo)
 qdrant_storage/
 mlflow_data/
+
+# Git worktrees
+.worktrees/
