@@ -105,6 +105,41 @@ async def test_retrieve_drops_below_hybrid_score_floor(monkeypatch):
     monkeypatch.setattr(retr_mod, "get_settings", real_get_settings)
 
 
+def test_fuse_preserves_dense_embedding():
+    """A dense hit's embedding must reach the fused RetrievedTurn."""
+    from datetime import UTC, datetime
+
+    from persona_rag.models import PersonaTurn, RetrievedTurn
+    from persona_rag.retrieval.hybrid import fuse_scores
+
+    def _t(_id: str) -> PersonaTurn:
+        return PersonaTurn(
+            id=_id,
+            your_reply="x",
+            incoming_context=["y"],
+            channel="telegram",
+            chat_id_hash="c1",
+            recipient_id_hash="r1",
+            timestamp=datetime(2026, 1, 1, tzinfo=UTC),
+            language="uk",
+            your_reply_len_chars=1,
+            your_reply_emoji_count=0,
+        )
+
+    dense = [
+        RetrievedTurn(turn=_t("a"), score=0.9, score_dense=0.9, embedding=[1.0, 0.0]),
+        RetrievedTurn(turn=_t("b"), score=0.5, score_dense=0.5, embedding=[0.0, 1.0]),
+    ]
+    bm25 = [
+        RetrievedTurn(turn=_t("c"), score=0.8, score_bm25=0.8),  # BM25-only, no embedding
+    ]
+    fused = fuse_scores(dense, bm25, alpha=1.0, top_k=10)
+    by_id = {r.turn.id: r for r in fused}
+    assert by_id["a"].embedding == [1.0, 0.0]
+    assert by_id["b"].embedding == [0.0, 1.0]
+    assert by_id["c"].embedding is None
+
+
 @pytest.mark.asyncio
 async def test_retrieve_floor_zero_keeps_everything(monkeypatch):
     """HYBRID_SCORE_FLOOR=0 disables the filter (backward compat)."""
