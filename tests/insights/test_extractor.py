@@ -51,6 +51,42 @@ def test_extract_prompt_has_attribution_rules():
     assert "affirm" in lower or "affirms" in lower
 
 
+def test_parse_drops_quote_not_in_me_turn():
+    """Spec §5.4 — quote not present in any Me: turn must be filtered out."""
+    response = (
+        '{"insights": [{"category": "interest", "subject": "basketball",'
+        ' "text": "Bohdan plays basketball", "confidence": 0.9,'
+        ' "source_quote": "soccer, basketball, track"}]}'
+    )
+    me_turns = ["я в школі", "та норм"]
+    out = parse_extractor_response(response, session_id="s1", me_turns=me_turns)
+    assert out == []
+
+
+def test_parse_keeps_quote_present_in_me_turn():
+    response = (
+        '{"insights": [{"category": "interest", "subject": "running",'
+        ' "text": "Bohdan runs", "confidence": 0.9,'
+        ' "source_quote": "побігав вранці 8км"}]}'
+    )
+    me_turns = ["побігав вранці 8км, голова прочистилась"]
+    out = parse_extractor_response(response, session_id="s1", me_turns=me_turns)
+    assert len(out) == 1
+    assert out[0].source_quote_validated is True
+
+
+def test_parse_short_quote_rejected():
+    """Quotes <10 chars are too vague to credibly attribute."""
+    response = (
+        '{"insights": [{"category": "opinion", "subject": "agree",'
+        ' "text": "Bohdan agrees", "confidence": 0.9,'
+        ' "source_quote": "ага"}]}'
+    )
+    me_turns = ["ага"]
+    out = parse_extractor_response(response, session_id="s1", me_turns=me_turns)
+    assert out == []
+
+
 def test_render_uses_me_and_contact_labels():
     """Spec §5.2 — speaker labels are Me: and Contact-<8>: not [friend]/[name]."""
     now = datetime(2025, 1, 1, tzinfo=UTC)

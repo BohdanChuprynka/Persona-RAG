@@ -116,10 +116,29 @@ def _strip_markdown_fence(text: str) -> str:
     return m.group(1) if m else text
 
 
-def parse_extractor_response(text: str, *, session_id: str) -> list[RawInsight]:
+_MIN_QUOTE_LEN = 10
+
+
+def _quote_found_in_me_turn(quote: str, me_turns: list[str]) -> bool:
+    q = quote.strip().lower()
+    if len(q) < _MIN_QUOTE_LEN:
+        return False
+    return any(q in (turn or "").lower() for turn in me_turns)
+
+
+def parse_extractor_response(
+    text: str,
+    *,
+    session_id: str,
+    me_turns: list[str] | None = None,
+) -> list[RawInsight]:
     """Parse the model output. Raises ValueError on un-parseable JSON.
 
-    Silently drops items with unknown categories.
+    If ``me_turns`` is provided (spec §5.4), each candidate insight's
+    `source_quote` MUST appear in at least one Me: turn (case-insensitive
+    substring) and be at least 10 chars. Insights failing this attribution
+    check are dropped silently. Pass ``me_turns=None`` to skip the check
+    (used by legacy tests).
     """
     cleaned = _strip_markdown_fence(text)
     try:
@@ -139,6 +158,12 @@ def parse_extractor_response(text: str, *, session_id: str) -> list[RawInsight]:
             continue
         if item.get("category") not in VALID_CATEGORIES:
             continue
+        quote = str(item.get("source_quote", ""))
+        validated = False
+        if me_turns is not None:
+            if not _quote_found_in_me_turn(quote, me_turns):
+                continue
+            validated = True
         try:
             out.append(
                 RawInsight(
@@ -147,8 +172,9 @@ def parse_extractor_response(text: str, *, session_id: str) -> list[RawInsight]:
                     subject=str(item["subject"]),
                     text=str(item["text"]),
                     confidence=float(item.get("confidence", 0.5)),
-                    source_quote=str(item.get("source_quote", "")),
+                    source_quote=quote,
                     extracted_at=now,
+                    source_quote_validated=validated,
                 )
             )
         except (ValidationError, KeyError, ValueError):
@@ -181,4 +207,5 @@ async def extract_from_session(
         max_tokens=2000,
         response_format={"type": "json_object"},
     )
-    return parse_extractor_response(response, session_id=session.session_id)
+    me_turns = [turn.your_reply or "" for turn in session.turns]
+    return parse_extractor_response(response, session_id=session.session_id, me_turns=me_turns)
