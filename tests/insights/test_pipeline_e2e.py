@@ -135,3 +135,48 @@ async def test_pipeline_e2e_produces_active_insight(tmp_path, monkeypatch):
     active = [r for r in rows if r.review_status == "auto"]
     assert len(active) >= 1
     fake_client.upsert.assert_called()
+
+
+@pytest.mark.asyncio
+async def test_pipeline_drops_no_verdict_raws_before_stage_d():
+    """The verification gate must drop NO-verdict raws so Stage D never
+    sees them."""
+    from datetime import UTC, datetime
+
+    from persona_rag.insights.extractor import RawInsight
+    from persona_rag.insights.verifier import VerificationVerdict
+    from scripts.distill_insights import _apply_verification
+
+    keep = RawInsight(
+        session_id="s1",
+        category="interest",
+        subject="running",
+        text="runs",
+        confidence=0.9,
+        source_quote="бігаю вранці",
+        extracted_at=datetime.now(UTC),
+    )
+    drop = RawInsight(
+        session_id="s2",
+        category="interest",
+        subject="basketball",
+        text="plays basketball",
+        confidence=0.9,
+        source_quote="soccer basketball track",
+        extracted_at=datetime.now(UTC),
+    )
+
+    async def fake_verify(raw, **_):
+        if raw.subject == "running":
+            return VerificationVerdict(verdict="YES", reason="ok")
+        return VerificationVerdict(verdict="NO", reason="not Bohdan-attributed")
+
+    out = await _apply_verification(
+        [keep, drop],
+        sessions_by_id={"s1": None, "s2": None},
+        verify_fn=fake_verify,
+        ambiguous_weight=0.5,
+    )
+    subjects = {r.subject for r in out}
+    assert "running" in subjects
+    assert "basketball" not in subjects

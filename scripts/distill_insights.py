@@ -33,6 +33,7 @@ from persona_rag.insights.persistence import (
 )
 from persona_rag.insights.router import route_insight
 from persona_rag.insights.sessions import build_sessions, filter_high_signal
+from persona_rag.insights.verifier import VerificationVerdict, verify_raw
 
 log = get_logger()
 
@@ -172,10 +173,28 @@ async def main_async(args: argparse.Namespace) -> int:
         run_elapsed_s=round(time.monotonic() - run_t0, 1),
     )
 
+    # Stage C->D verification gate (spec 2026-05-31 §5.5)
+    sessions_by_id = {s.session_id: s for s in high}
+    raws = await _apply_verification(raws, sessions_by_id=sessions_by_id)
+
+    # Build session->partners mapping for Stage D's distinct_partners count.
+    session_to_partners: dict[str, set[str]] = {}
+    for sess in high:
+        partners: set[str] = set()
+        for turn in sess.turns:
+            rcpt = getattr(turn, "recipient_id_hash", None)
+            if rcpt:
+                partners.add(rcpt)
+        session_to_partners[sess.session_id] = partners
+
     # Stage D — consolidate
     synonyms_path = settings.INSIGHTS_SYNONYMS_PATH or _default_synonyms_path()
     synonyms = load_synonyms(synonyms_path) if synonyms_path.exists() else {}
-    consolidated = await consolidate(raws, synonyms=synonyms)
+    consolidated = await consolidate(
+        raws,
+        synonyms=synonyms,
+        session_to_partners=session_to_partners,
+    )
     log.info("insights_stage_d_done", n_consolidated=len(consolidated))
 
     # Stage E — route
@@ -301,6 +320,63 @@ def _persist_raws_and_mark(session_id: str, raws: list[RawInsight]) -> None:
             row.error_message = None
             s.add(row)
         s.commit()
+
+
+async def _apply_verification(
+    raws: list[RawInsight],
+    *,
+    sessions_by_id: dict,
+    verify_fn=verify_raw,
+    ambiguous_weight: float = 0.5,
+) -> list[RawInsight]:
+    """Spec 2026-05-31 §5.5 — run each raw through the verifier.
+
+    Drops NO verdicts; keeps YES and AMBIGUOUS; keeps fail-open None verdicts.
+    Records verdict + reason on each kept raw so downstream stages (and the
+    audit trail) can see the verifier's call.
+    """
+    import asyncio
+
+    settings = get_settings()
+    if not settings.INSIGHTS_VERIFY_ENABLED:
+        log.info("verification_skipped", reason="INSIGHTS_VERIFY_ENABLED=false")
+        return raws
+
+    sem = asyncio.Semaphore(settings.INSIGHTS_VERIFY_CONCURRENCY)
+
+    async def one(raw: RawInsight) -> VerificationVerdict:
+        async with sem:
+            session = sessions_by_id.get(raw.session_id)
+            return await verify_fn(raw, session=session)
+
+    verdicts: list[VerificationVerdict] = await asyncio.gather(*(one(r) for r in raws))
+
+    kept: list[RawInsight] = []
+    n_yes = n_no = n_ambig = n_err = 0
+    for raw, v in zip(raws, verdicts, strict=True):
+        if v.verdict == "NO":
+            n_no += 1
+            continue
+        raw.verification_verdict = v.verdict
+        raw.verification_reason = v.reason
+        if v.verdict == "YES":
+            n_yes += 1
+        elif v.verdict == "AMBIGUOUS":
+            n_ambig += 1
+        else:
+            n_err += 1
+        kept.append(raw)
+
+    log.info(
+        "verification_done",
+        kept=len(kept),
+        dropped=n_no,
+        yes=n_yes,
+        ambiguous=n_ambig,
+        api_errors=n_err,
+        total_input=len(raws),
+    )
+    return kept
 
 
 def _mark_session_failed(session_id: str, msg: str) -> None:
