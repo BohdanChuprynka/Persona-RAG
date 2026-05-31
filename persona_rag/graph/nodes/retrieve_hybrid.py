@@ -21,6 +21,8 @@ async def retrieve_hybrid(state: GraphState) -> GraphState:
         "retrieved",
         query=state["incoming"][:80],
         count=len(retrieved),
+        # retrieved is reversed when MMR is enabled (most-relevant last for prompt
+        # injection); take the last 3 so the trace shows the highest-impact picks.
         top=[
             {
                 "id": r.turn.id,
@@ -30,7 +32,7 @@ async def retrieve_hybrid(state: GraphState) -> GraphState:
                 "lang": r.turn.language,
                 "reply_preview": r.turn.your_reply[:60],
             }
-            for r in retrieved[:3]
+            for r in retrieved[-3:]
         ],
     )
     return state
