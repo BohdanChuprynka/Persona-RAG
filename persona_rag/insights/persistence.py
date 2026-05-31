@@ -80,6 +80,7 @@ async def persist_insights(
                         latest_date=ci.latest_date,
                         trajectory=ci.trajectory,
                         source_session_ids=json.dumps(ci.source_session_ids),
+                        distinct_partners=ci.distinct_partners,
                         source="chat",
                         review_status=statuses[ci.id],
                         edited_text=None,
@@ -118,6 +119,7 @@ async def persist_insights(
             existing.latest_date = max(_aware(existing.latest_date), _aware(ci.latest_date))
             existing.trajectory = ci.trajectory
             existing.source_session_ids = json.dumps(ci.source_session_ids)
+            existing.distinct_partners = ci.distinct_partners
             existing.review_status = statuses[ci.id]
             existing.updated_at = now
             s.add(existing)
