@@ -129,10 +129,14 @@ def search_dense(
     out: list[RetrievedTurn] = []
     for h in response.points:
         turn = PersonaTurn.model_validate(h.payload)
-        # Qdrant returns h.vector either as list[float] or dict (named vectors).
-        # We use a single unnamed vector, so h.vector is list[float] or None.
         vec = getattr(h, "vector", None)
-        embedding = vec if isinstance(vec, list) else None
+        # Accept only flat list[float | int]. Reject dict (named vectors) and
+        # list[list[float]] (multi-vector collections). Our collection is
+        # single unnamed vector — see ensure_collection — so flat list is the
+        # only valid shape; defensive guard catches accidental config drift.
+        embedding = (
+            vec if isinstance(vec, list) and (not vec or isinstance(vec[0], int | float)) else None
+        )
         out.append(
             RetrievedTurn(
                 turn=turn,

@@ -56,6 +56,7 @@ def test_upsert_then_search_returns_top() -> None:
     results = search_dense(c, "test_coll", [1.0, 0.0, 0.0, 0.0], top_k=5)
     assert len(results) == 1
     assert results[0].turn.your_reply == "hi"
+    assert results[0].embedding == [1.0, 0.0, 0.0, 0.0]
 
 
 def test_search_dense_populates_embedding_when_vectors_returned(monkeypatch):
