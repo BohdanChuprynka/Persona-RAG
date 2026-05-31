@@ -101,3 +101,14 @@ def test_stable_insight_id_is_deterministic():
     # Different inputs → different IDs
     assert a != _stable_insight_id("interest", "different")
     assert a != _stable_insight_id("bio", "cyberpunk 2077")
+
+
+def test_consolidate_prompt_has_preserve_specifics_rule():
+    """Spec §5.6 — consolidator prompt must instruct to keep concrete tokens."""
+    from persona_rag.insights.consolidator import CONSOLIDATE_PROMPT
+
+    rendered = CONSOLIDATE_PROMPT.format(n=3, observations="x")
+    lower = rendered.lower()
+    assert "preserve" in lower or "keep" in lower
+    assert "concrete" in lower or "specific" in lower or "particulars" in lower
+    assert "genre" in lower or "name" in lower or "number" in lower

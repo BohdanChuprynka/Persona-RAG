@@ -82,6 +82,18 @@ how this changed over time (e.g. "active 2023-Q1 → present", or "one-off in 20
 Observations:
 {observations}
 
+Rules:
+- Preserve concrete particulars verbatim. If the source observations mention
+  specific genres, places, names, numbers, or dates — KEEP them in the
+  consolidated insight. Do NOT abstract "plays jazz and indie rock" into
+  "enjoys music"; do NOT abstract "works at McDonald's earning $13/hr"
+  into "is employed". Specificity is what makes an insight retrievable
+  later — vague summaries are noise.
+- When concrete tokens conflict across observations (e.g. "plays jazz" +
+  "plays rock"), keep both: "plays jazz and rock".
+- Date / time tokens: preserve only when consistent across observations;
+  if dates conflict, omit dates and note "various dates" in the trajectory.
+
 Output format:
 <consolidated insight sentence>
 Trajectory: <one-line trajectory>
