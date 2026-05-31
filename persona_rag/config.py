@@ -68,6 +68,11 @@ class Settings(BaseSettings):
     HYBRID_SCORE_FLOOR: float = 0.15
     RECENCY_HALF_LIFE_DAYS: int = 180
     HYBRID_DENSE_ALPHA: float = Field(default=0.7, ge=0.0, le=1.0)
+    # MMR (Maximal Marginal Relevance) reranking — see
+    # docs/superpowers/specs/2026-05-31-mmr-retrieval-design.md
+    MMR_ENABLED: bool = True
+    MMR_POOL_SIZE: int = 30
+    MMR_LAMBDA: float = Field(default=0.6, ge=0.0, le=1.0)
 
     # Generation
     MAX_REPLY_TOKENS: int = 500

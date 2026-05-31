@@ -28,6 +28,9 @@ def test_settings_load_from_env(monkeypatch, tmp_path):
     assert s.TOP_K == 4  # default
     assert s.HYBRID_SCORE_FLOOR == 0.15  # default
     assert s.HYBRID_DENSE_ALPHA == 0.7  # default
+    assert s.MMR_ENABLED is True
+    assert s.MMR_POOL_SIZE == 30
+    assert s.MMR_LAMBDA == 0.6
 
 
 def test_insights_settings_defaults(monkeypatch, tmp_path):
