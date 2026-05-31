@@ -116,6 +116,77 @@ CYRILLIC_SENT_STARTS: frozenset[str] = frozenset(
 )
 
 
+# Spec 2026-05-31 §5.1.a — narrow Slavic function-word blocklist.
+# Pronouns + clearest non-content particles only. Deliberately excludes
+# verbs (хочу, можу, буде), opinion adverbs (дуже, тільки, просто), and
+# time/place adverbs (зараз, там, тут) because they carry signal.
+SLAVIC_FUNCTION_WORDS: frozenset[str] = frozenset(
+    {
+        # ua personal / possessive / reflexive pronouns
+        "мене",
+        "тебе",
+        "себе",
+        "нього",
+        "неї",
+        "них",
+        "мені",
+        "тобі",
+        "собі",
+        "йому",
+        "їй",
+        "мій",
+        "моя",
+        "моє",
+        "мої",
+        "твій",
+        "твоя",
+        "твоє",
+        "твої",
+        "його",
+        "її",
+        "їх",
+        "їхній",
+        "їхня",
+        "їхнє",
+        "наш",
+        "наша",
+        "наше",
+        "наші",
+        "ваш",
+        "ваша",
+        "ваше",
+        "ваші",
+        # ua clearest non-content particles / indefinite words
+        "нічого",
+        "щось",
+        "хтось",
+        "кудись",
+        "якось",
+        "якийсь",
+        "така",
+        "такий",
+        "таке",
+        "сюди",
+        "звідти",
+        # ru variants of the above
+        "меня",
+        "тебя",
+        "себя",
+        "его",
+        "ее",
+        "их",
+        "мне",
+        "ему",
+        "ей",
+        "им",
+        "что-то",
+        "кто-то",
+        "куда-то",
+        "как-то",
+    }
+)
+
+
 def is_sentence_start_only(positions: list[int]) -> bool:
     """True if a token only appears at sentence-position 0 (i.e., capitalized
     only because it starts a sentence, not because it's an entity)."""
@@ -131,14 +202,29 @@ def passes_entity_filter(
     min_count: int = 10,
     min_sessions: int = 3,
     min_len: int = 4,
+    whitelist: frozenset[str] | set[str] | None = None,
 ) -> bool:
-    """Apply Stage A noise filters. Return True iff the token survives."""
+    """Apply Stage A noise filters. Return True iff the token survives.
+
+    `whitelist` (typically loaded from synonyms.yaml) bypasses content
+    blocklists (URL pieces / English fillers / Cyrillic sentence-starts /
+    Slavic function words) AND the length gate, but still enforces
+    frequency / session-breadth / non-zero-positions checks.
+    """
     lower = token.lower()
+    if whitelist and lower in whitelist:
+        if not token or " " in token:
+            return False
+        if count < min_count or n_sessions < min_sessions:
+            return False
+        return not all_zero_positions
     if len(token) < min_len:
         return False
     if lower in URL_PIECES:
         return False
     if lower in ENGLISH_FILLERS:
+        return False
+    if lower in SLAVIC_FUNCTION_WORDS:
         return False
     if token in CYRILLIC_SENT_STARTS:
         return False
