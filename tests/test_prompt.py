@@ -123,3 +123,74 @@ def test_system_template_has_bio_over_opinion_factual_rule():
     lower = rendered.lower()
     assert "bio" in lower and "opinion" in lower
     assert "yes/no" in lower or "factual" in lower
+
+
+def test_prompt_no_longer_bans_paragraphs():
+    """Spec §5.2 — the "NEVER paragraphs" rule must be gone."""
+    from persona_rag.generate.prompt import SYSTEM_TEMPLATE
+
+    rendered = SYSTEM_TEMPLATE.format(
+        persona_name="Bohdan",
+        persona_description="test",
+        avg_len_chars=42,
+        median_len_chars=25,
+        emoji_rate_per_char=0.001,
+        primary_language="uk",
+        top_bigrams_joined="x",
+        user_memory="x",
+        insights_block="",
+    )
+    lower = rendered.lower()
+    assert "never write polished multi-sentence paragraphs" not in lower
+    assert "default is short bursts" not in lower
+    assert "length is dynamic, not fixed" not in lower
+
+
+def test_prompt_has_shape_matches_the_moment_rule():
+    """Spec §5.2 — replace length prescriptions with one rule about matching
+    the moment via the retrieved examples."""
+    from persona_rag.generate.prompt import SYSTEM_TEMPLATE
+
+    rendered = SYSTEM_TEMPLATE.format(
+        persona_name="Bohdan",
+        persona_description="test",
+        avg_len_chars=42,
+        median_len_chars=25,
+        emoji_rate_per_char=0.001,
+        primary_language="uk",
+        top_bigrams_joined="x",
+        user_memory="x",
+        insights_block="",
+    )
+    lower = rendered.lower()
+    assert "shape matches the moment" in lower
+    # Must reference using the retrieved examples as the shape template.
+    assert "retrieved past replies" in lower or "retrieved examples" in lower
+
+
+def test_prompt_keeps_existing_voice_rules():
+    """Regression guard: voice rules unrelated to length stay intact."""
+    from persona_rag.generate.prompt import SYSTEM_TEMPLATE
+
+    rendered = SYSTEM_TEMPLATE.format(
+        persona_name="Bohdan",
+        persona_description="test",
+        avg_len_chars=42,
+        median_len_chars=25,
+        emoji_rate_per_char=0.001,
+        primary_language="uk",
+        top_bigrams_joined="x",
+        user_memory="x",
+        insights_block="",
+    )
+    lower = rendered.lower()
+    # Casing rule
+    assert "copy the casing" in lower
+    # Bio anchor rule
+    assert "bio anchor" in lower
+    # Register-match-when-insulted rule
+    assert "register match" in lower or "match the heat" in lower
+    # Travel vs residence rule
+    assert "travel vs residence" in lower or "trip is an event" in lower or "travel vs" in lower
+    # Anti-fabrication for self-description
+    assert "anti-fabrication" in lower or "fabrication" in lower
