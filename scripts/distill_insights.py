@@ -185,6 +185,7 @@ async def main_async(args: argparse.Namespace) -> int:
             ci,
             confidence_threshold=settings.INSIGHTS_CONFIDENCE_THRESHOLD,
             min_evidence=settings.INSIGHTS_MIN_EVIDENCE,
+            min_distinct_partners=settings.INSIGHTS_MIN_DISTINCT_PARTNERS,
             stale_years=settings.INSIGHTS_STALE_DEMOTE_YEARS,
             stale_min_evidence=settings.INSIGHTS_STALE_DEMOTE_MIN_EVIDENCE,
             now=now,

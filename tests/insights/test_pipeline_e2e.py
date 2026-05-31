@@ -111,6 +111,7 @@ async def test_pipeline_e2e_produces_active_insight(tmp_path, monkeypatch):
             ci,
             confidence_threshold=0.7,
             min_evidence=2,
+            min_distinct_partners=0,
             stale_years=2.0,
             stale_min_evidence=5,
             now=now,

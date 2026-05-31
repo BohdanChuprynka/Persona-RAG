@@ -35,6 +35,7 @@ def test_route_auto_when_strong_and_recent():
             ci,
             confidence_threshold=0.7,
             min_evidence=2,
+            min_distinct_partners=0,
             stale_years=2.0,
             stale_min_evidence=5,
             now=now,
@@ -51,6 +52,7 @@ def test_route_pending_when_weak():
             ci,
             confidence_threshold=0.7,
             min_evidence=2,
+            min_distinct_partners=0,
             stale_years=2.0,
             stale_min_evidence=5,
             now=now,
@@ -68,6 +70,7 @@ def test_route_pending_when_stale_and_weak_evidence():
             ci,
             confidence_threshold=0.7,
             min_evidence=2,
+            min_distinct_partners=0,
             stale_years=2.0,
             stale_min_evidence=5,
             now=now,
@@ -85,9 +88,93 @@ def test_route_auto_when_stale_but_strong_evidence():
             ci,
             confidence_threshold=0.7,
             min_evidence=2,
+            min_distinct_partners=0,
             stale_years=2.0,
             stale_min_evidence=5,
             now=now,
         )
         == "auto"
     )
+
+
+def test_routes_pending_when_partners_below_threshold():
+    """Spec §5.7 — insight from too few distinct partners is pending."""
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    ci = ConsolidatedInsight(
+        id="x",
+        category="interest",
+        canonical_subject="basketball",
+        text="plays basketball",
+        confidence=0.9,
+        evidence_count=3,
+        earliest_date=now,
+        latest_date=now,
+        trajectory=None,
+        source_session_ids=["s1", "s2", "s3"],
+        distinct_partners=1,
+    )
+    result = route_insight(
+        ci,
+        confidence_threshold=0.7,
+        min_evidence=3,
+        min_distinct_partners=2,
+        stale_years=2.0,
+        stale_min_evidence=5,
+        now=now,
+    )
+    assert result == "pending"
+
+
+def test_routes_auto_when_partners_at_threshold():
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    ci = ConsolidatedInsight(
+        id="x",
+        category="interest",
+        canonical_subject="running",
+        text="runs",
+        confidence=0.9,
+        evidence_count=3,
+        earliest_date=now,
+        latest_date=now,
+        trajectory=None,
+        source_session_ids=["s1", "s2", "s3"],
+        distinct_partners=2,
+    )
+    result = route_insight(
+        ci,
+        confidence_threshold=0.7,
+        min_evidence=3,
+        min_distinct_partners=2,
+        stale_years=2.0,
+        stale_min_evidence=5,
+        now=now,
+    )
+    assert result == "auto"
+
+
+def test_min_evidence_default_bumped_from_2_to_3():
+    """Insight with ev=2 no longer auto-promotes under new defaults."""
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    ci = ConsolidatedInsight(
+        id="x",
+        category="interest",
+        canonical_subject="running",
+        text="runs",
+        confidence=0.9,
+        evidence_count=2,
+        earliest_date=now,
+        latest_date=now,
+        trajectory=None,
+        source_session_ids=["s1", "s2"],
+        distinct_partners=2,
+    )
+    result = route_insight(
+        ci,
+        confidence_threshold=0.7,
+        min_evidence=3,
+        min_distinct_partners=2,
+        stale_years=2.0,
+        stale_min_evidence=5,
+        now=now,
+    )
+    assert result == "pending"
