@@ -40,6 +40,17 @@ def test_system_prompt_mentions_persona_name():
     assert "bio|opinion|interest|behavior" in rendered or "bio" in rendered
 
 
+def test_extract_prompt_has_attribution_rules():
+    """Spec §5.3 — extractor must reference Me:/Contact- labels and attribution."""
+    rendered = EXTRACT_SYSTEM_PROMPT.format(persona_name="Bohdan")
+    lower = rendered.lower()
+    assert "me:" in lower
+    assert "contact-" in lower
+    assert "source_quote" in lower
+    assert "third party" in lower or "third-party" in lower or "another person" in lower
+    assert "affirm" in lower or "affirms" in lower
+
+
 def test_render_uses_me_and_contact_labels():
     """Spec §5.2 — speaker labels are Me: and Contact-<8>: not [friend]/[name]."""
     now = datetime(2025, 1, 1, tzinfo=UTC)

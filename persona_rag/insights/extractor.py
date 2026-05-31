@@ -1,3 +1,5 @@
+# ruff: noqa: RUF001
+# Reason: extractor prompt and example strings intentionally include Cyrillic.
 """Stage C — prompt template + JSON parser. LLM call wrapper in Task 9."""
 
 from __future__ import annotations
@@ -45,6 +47,20 @@ Rules:
 - Avoid duplicates within one session
 - Each insight ≤ 25 words
 - Max 10 insights per session
+- Attribution rule: every insight you emit MUST be supported by a quote
+  from a `Me:` turn. The `source_quote` field MUST be text that literally
+  appears in a `Me:` turn of this session. Quotes from `Contact-XXXX:`
+  turns are NEVER valid — those are someone else's words, not
+  {persona_name}'s.
+- Third-party rule: if a `Contact-XXXX:` turn names another person doing
+  something ("Pennel плаває", "Oleksiy грає"), do NOT attribute that
+  activity to {persona_name} even if {persona_name} is in the conversation.
+  Skip it.
+- Affirmation rule: when a `Contact-XXXX:` introduces a topic and the next
+  `Me:` turn affirms or denies it explicitly, the `Me:` turn is the
+  evidence. Friend asks "ти граєш у баскет?" → Me: "ага, граю в неділю" →
+  valid insight (source_quote from Me:). Friend says "basketball" alone →
+  Me: changes the subject → NOT a valid insight (no Me: turn supports it).
 """
 
 
