@@ -124,9 +124,21 @@ def search_dense(
         limit=top_k,
         query_filter=flt,
         with_payload=True,
+        with_vectors=True,
     )
     out: list[RetrievedTurn] = []
     for h in response.points:
         turn = PersonaTurn.model_validate(h.payload)
-        out.append(RetrievedTurn(turn=turn, score=float(h.score), score_dense=float(h.score)))
+        # Qdrant returns h.vector either as list[float] or dict (named vectors).
+        # We use a single unnamed vector, so h.vector is list[float] or None.
+        vec = getattr(h, "vector", None)
+        embedding = vec if isinstance(vec, list) else None
+        out.append(
+            RetrievedTurn(
+                turn=turn,
+                score=float(h.score),
+                score_dense=float(h.score),
+                embedding=embedding,
+            )
+        )
     return out
