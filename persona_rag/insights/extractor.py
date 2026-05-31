@@ -62,8 +62,19 @@ class RawInsight(BaseModel):
     verification_reason: str | None = None
 
 
+def _contact_label(recipient_id_hash: str | None) -> str:
+    """Stable 8-char-prefix label for a recipient. Same hash → same label."""
+    if not recipient_id_hash:
+        return "Contact-unknown"
+    return f"Contact-{recipient_id_hash[:8]}"
+
+
 def render_session(session: SessionDoc, persona_name: str) -> str:
-    """Render a session as a numbered conversation with [friend] / [persona_name] labels."""
+    """Render a session with Me: / Contact-<8hex>: speaker labels.
+
+    Spec 2026-05-31 §5.2 — explicit speaker attribution lets the extractor
+    discriminate first-person assertions from topics the friend brought up.
+    """
     lines: list[str] = [f"Persona name: {persona_name}", f"Session date: {session.start}", ""]
     counter = 1
     for turn in session.turns:
@@ -72,10 +83,11 @@ def render_session(session: SessionDoc, persona_name: str) -> str:
         except json.JSONDecodeError:
             ctx = []
         last_in = ctx[-1] if ctx else ""
+        contact = _contact_label(turn.recipient_id_hash)
         if last_in:
-            lines.append(f"T{counter} [friend]: {last_in}")
+            lines.append(f"T{counter} {contact}: {last_in}")
             counter += 1
-        lines.append(f"T{counter} [{persona_name}]: {turn.your_reply}")
+        lines.append(f"T{counter} Me: {turn.your_reply}")
         counter += 1
     return "\n".join(lines)
 

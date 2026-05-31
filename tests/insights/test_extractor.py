@@ -40,7 +40,8 @@ def test_system_prompt_mentions_persona_name():
     assert "bio|opinion|interest|behavior" in rendered or "bio" in rendered
 
 
-def test_render_session_labels_speakers():
+def test_render_uses_me_and_contact_labels():
+    """Spec §5.2 — speaker labels are Me: and Contact-<8>: not [friend]/[name]."""
     now = datetime(2025, 1, 1, tzinfo=UTC)
     rows = [
         _t("я кодю", now, ctx=["що робиш?"]),
@@ -48,10 +49,43 @@ def test_render_session_labels_speakers():
     ]
     sessions = build_sessions(rows, gap_hours=6)
     rendered = render_session(sessions[0], persona_name="Bohdan")
-    assert "[friend]" in rendered
-    assert "[Bohdan]" in rendered
+    assert "Me:" in rendered
+    assert "Contact-" in rendered
+    assert "[friend]" not in rendered
+    assert "[Bohdan]" not in rendered
     assert "що робиш?" in rendered
     assert "я кодю" in rendered
+
+
+def test_render_distinct_contacts_get_distinct_labels():
+    """Two recipient_id_hash values render as two distinct Contact-XXXX labels."""
+    import json as _json
+    from datetime import timedelta
+
+    now = datetime(2026, 1, 1, 10, 0, tzinfo=UTC)
+
+    def t(reply: str, ts: datetime, ctx: list[str], rcpt: str) -> PersonaTurnRow:
+        return PersonaTurnRow(
+            id=f"t-{ts.isoformat()}-{rcpt}",
+            your_reply=reply,
+            incoming_context_json=_json.dumps(ctx),
+            channel="telegram",
+            chat_id_hash="group1",
+            recipient_id_hash=rcpt,
+            timestamp=ts,
+            language="uk",
+            your_reply_len_chars=len(reply),
+            your_reply_emoji_count=0,
+        )
+
+    rows = [
+        t("hi", now, ["A"], "aaaaaaaa11111111"),
+        t("ok", now + timedelta(minutes=1), ["B"], "bbbbbbbb22222222"),
+    ]
+    sessions = build_sessions(rows, gap_hours=6)
+    rendered = render_session(sessions[0], persona_name="Bohdan")
+    assert "Contact-aaaaaaaa" in rendered
+    assert "Contact-bbbbbbbb" in rendered
 
 
 def test_parse_extractor_response_happy():
