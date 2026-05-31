@@ -116,7 +116,17 @@ class Settings(BaseSettings):
     INSIGHTS_MIN_SCORE_FLOOR: float = 0.2
     INSIGHTS_TOP_N_STATIC: int = 5
     INSIGHTS_CONFIDENCE_THRESHOLD: float = 0.7
-    INSIGHTS_MIN_EVIDENCE: int = 2
+    INSIGHTS_MIN_EVIDENCE: int = 3
+    # Stage E: require evidence from at least N distinct chat partners
+    # (counts unique recipient_id_hash across source_session_ids). Stops
+    # 3 misattributions from the same chat thread looking like 3 confirmations.
+    INSIGHTS_MIN_DISTINCT_PARTNERS: int = 2
+    # Stage C->D verification gate — see specs/2026-05-31-insights-extraction-accuracy-design.md
+    INSIGHTS_VERIFY_MODEL: str = "gpt-4o-mini"
+    INSIGHTS_VERIFY_CONCURRENCY: int = 10
+    INSIGHTS_VERIFY_ENABLED: bool = True
+    # AMBIGUOUS verifier verdicts count as N units of evidence in Stage D.
+    INSIGHTS_AMBIGUOUS_EVIDENCE_WEIGHT: float = 0.5
     INSIGHTS_RECENCY_HALF_LIFE_DAYS: int = 365
     INSIGHTS_STALE_DEMOTE_YEARS: float = 2.0
     INSIGHTS_STALE_DEMOTE_MIN_EVIDENCE: int = 5

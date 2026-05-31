@@ -58,7 +58,12 @@ def test_insights_settings_defaults(monkeypatch, tmp_path):
     assert s.INSIGHTS_MIN_SCORE_FLOOR == 0.2
     assert s.INSIGHTS_TOP_N_STATIC == 5
     assert s.INSIGHTS_CONFIDENCE_THRESHOLD == 0.7
-    assert s.INSIGHTS_MIN_EVIDENCE == 2
+    assert s.INSIGHTS_MIN_EVIDENCE == 3
+    assert s.INSIGHTS_MIN_DISTINCT_PARTNERS == 2
+    assert s.INSIGHTS_VERIFY_MODEL == "gpt-4o-mini"
+    assert s.INSIGHTS_VERIFY_CONCURRENCY == 10
+    assert s.INSIGHTS_VERIFY_ENABLED is True
+    assert s.INSIGHTS_AMBIGUOUS_EVIDENCE_WEIGHT == 0.5
     assert s.INSIGHTS_RECENCY_HALF_LIFE_DAYS == 365
     assert s.INSIGHTS_STALE_DEMOTE_YEARS == 2.0
     assert s.INSIGHTS_STALE_DEMOTE_MIN_EVIDENCE == 5
