@@ -68,8 +68,17 @@ async def main_async(args: argparse.Namespace) -> int:
         )
     log.info("insights_corpus_loaded", n_turns=len(all_turns))
 
-    # Stage A — always re-runs (cheap)
-    stage_a = run_stage_a(all_turns)
+    # Stage A — always re-runs (cheap). Build whitelist from synonyms so
+    # high-frequency user-blessed tokens (e.g. "мама" / "школа") never get
+    # filtered by the narrow function-word blocklist added in spec §5.1.b.
+    synonyms_path = settings.INSIGHTS_SYNONYMS_PATH or _default_synonyms_path()
+    synonyms_for_whitelist = load_synonyms(synonyms_path) if synonyms_path.exists() else {}
+    entity_whitelist: set[str] = set()
+    for canonical, variants in synonyms_for_whitelist.items():
+        entity_whitelist.add(canonical.lower())
+        for v in variants:
+            entity_whitelist.add(v.lower())
+    stage_a = run_stage_a(all_turns, entity_whitelist=entity_whitelist)
     persist_algo_signals(stage_a)
     log.info("insights_stage_a_done", **{k: len(v) for k, v in stage_a.items()})
     entity_hints = [e["subject"] for e in stage_a["entity"][:10]]

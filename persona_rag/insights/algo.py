@@ -32,10 +32,16 @@ def _tokens_with_positions(text: str) -> list[tuple[str, int]]:
     return out
 
 
-def extract_entities(rows: list[PersonaTurnRow]) -> list[dict[str, Any]]:
+def extract_entities(
+    rows: list[PersonaTurnRow],
+    *,
+    whitelist: frozenset[str] | set[str] | None = None,
+) -> list[dict[str, Any]]:
     """Mine candidate entities from persona's own replies.
 
     Returns a list of dicts ready to become AlgoSignal(kind="entity", ...).
+    `whitelist` (lowercased tokens from synonyms.yaml) bypasses content
+    blocklists; see `passes_entity_filter`.
     """
     counts: dict[str, int] = defaultdict(int)
     sessions: dict[str, set[str]] = defaultdict(set)
@@ -66,6 +72,7 @@ def extract_entities(rows: list[PersonaTurnRow]) -> list[dict[str, Any]]:
             count=count,
             n_sessions=n_sessions,
             all_zero_positions=all_zero,
+            whitelist=whitelist,
         ):
             continue
         candidates.append(
@@ -237,10 +244,14 @@ def extract_style(rows: list[PersonaTurnRow]) -> list[dict[str, Any]]:
     ]
 
 
-def run_stage_a(rows: list[PersonaTurnRow]) -> dict[str, list[dict[str, Any]]]:
+def run_stage_a(
+    rows: list[PersonaTurnRow],
+    *,
+    entity_whitelist: frozenset[str] | set[str] | None = None,
+) -> dict[str, list[dict[str, Any]]]:
     """Run all five Stage A extractors. Caller persists results."""
     return {
-        "entity": extract_entities(rows),
+        "entity": extract_entities(rows, whitelist=entity_whitelist),
         "rhythm": extract_counterparty_rhythms(rows),
         "language": extract_languages(rows),
         "phase": extract_phases(rows),

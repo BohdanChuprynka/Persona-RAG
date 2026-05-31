@@ -73,3 +73,31 @@ def test_extract_entities_caps_at_top_50():
             )
     out = extract_entities(rows)
     assert len(out) <= 50
+
+
+def test_extract_entities_passes_synonyms_as_whitelist():
+    """Tokens listed in synonyms.yaml must bypass the function-word blocklist."""
+    rows: list[PersonaTurnRow] = []
+    for i in range(15):  # >=min_count and across 4 distinct chat_id_hashes
+        rows.append(
+            PersonaTurnRow(
+                id=f"t{i}",
+                your_reply="правда мене зовсім не цікавить",
+                incoming_context_json="[]",
+                channel="telegram",
+                chat_id_hash=f"chat{i % 4}",
+                recipient_id_hash=f"r{i % 4}",
+                timestamp=datetime(2026, 1, 1, tzinfo=UTC),
+                language="uk",
+                your_reply_len_chars=20,
+                your_reply_emoji_count=0,
+            )
+        )
+
+    out_no_wl = extract_entities(rows, whitelist=None)
+    subjects_no_wl = {e["subject"].lower() for e in out_no_wl}
+    assert "мене" not in subjects_no_wl
+
+    out_wl = extract_entities(rows, whitelist={"мене"})
+    subjects_wl = {e["subject"].lower() for e in out_wl}
+    assert "мене" in subjects_wl
