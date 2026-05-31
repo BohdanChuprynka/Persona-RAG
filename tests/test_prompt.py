@@ -83,3 +83,41 @@ def test_prompt_omits_bio_header_when_no_bio_insights():
     out = _render_insights_block(insights)
     assert "What's true about you" not in out
     assert "Things you talk about / are into:" in out
+
+
+def test_system_template_has_bio_anchor_priority_rule():
+    """Spec §5.8 — model is told to USE bio insights, not always deflect."""
+    from persona_rag.generate.prompt import SYSTEM_TEMPLATE
+
+    rendered = SYSTEM_TEMPLATE.format(
+        persona_name="Bohdan",
+        persona_description="test",
+        avg_len_chars=42,
+        emoji_rate_per_char=0.001,
+        primary_language="uk",
+        top_bigrams_joined="x",
+        user_memory="x",
+        insights_block="",
+    )
+    assert "bio" in rendered.lower()
+    assert "anchor" in rendered.lower() or "bio facts" in rendered.lower()
+    assert "куди в школу" in rendered or "школу ходиш" in rendered
+
+
+def test_system_template_has_bio_over_opinion_factual_rule():
+    """Spec §5.9 — bio > opinion when answering yes/no factual questions."""
+    from persona_rag.generate.prompt import SYSTEM_TEMPLATE
+
+    rendered = SYSTEM_TEMPLATE.format(
+        persona_name="Bohdan",
+        persona_description="test",
+        avg_len_chars=42,
+        emoji_rate_per_char=0.001,
+        primary_language="uk",
+        top_bigrams_joined="x",
+        user_memory="x",
+        insights_block="",
+    )
+    lower = rendered.lower()
+    assert "bio" in lower and "opinion" in lower
+    assert "yes/no" in lower or "factual" in lower
