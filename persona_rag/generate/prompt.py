@@ -118,35 +118,47 @@ def build_messages(
 
 
 def _render_insights_block(insights: dict[str, Any]) -> str:
-    """Render semantic + static insight bullets. Empty string when nothing to render."""
+    """Render semantic + language insight bullets. Empty string when nothing.
+
+    Bio insights get their own section (so the bio-anchor priority rule in
+    the system prompt has a visible target). The static entities line was
+    removed in spec 2026-05-31 §5.1.c — it was noise (Ukrainian pronouns)
+    and the semantic insights already cover what Bohdan talks about.
+    """
     semantic = insights.get("semantic", [])
     static = insights.get("static", {})
 
     lines: list[str] = []
-    if semantic:
+
+    bio = [r for r in semantic if getattr(r, "category", None) == "bio"]
+    other = [r for r in semantic if getattr(r, "category", None) != "bio"]
+
+    if bio:
+        lines.append("")
+        lines.append("What's true about you (bio facts):")
+        for r in bio:
+            traj = f"  [{r.trajectory}]" if r.trajectory else ""
+            lines.append(f"- {r.text}{traj}")
+
+    if other:
         lines.append("")
         lines.append("Things you talk about / are into:")
-        for r in semantic:
+        for r in other:
             traj = f"  [{r.trajectory}]" if r.trajectory else ""
             lines.append(f"- {r.text}{traj}")
 
     languages = static.get("languages", [])
-    entities = static.get("entities", [])
-    if languages or entities:
+    if languages:
         lines.append("")
         lines.append("Patterns:")
-        if languages:
-            tops = languages[:3]
-            parts = [
-                f"~{int(lang['percentage'] * 100)}% {lang['subject']}"
-                for lang in tops
-                if lang.get("percentage")
-            ]
-            mix = " / ".join(parts)
-            if mix:
-                lines.append(f"- chat is {mix}")
-        if entities:
-            ents = ", ".join(e["subject"] for e in entities[:3])
-            lines.append(f"- recurring topics: {ents}")
+        tops = languages[:3]
+        parts = [
+            f"~{int(lang['percentage'] * 100)}% {lang['subject']}"
+            for lang in tops
+            if lang.get("percentage")
+        ]
+        mix = " / ".join(parts)
+        if mix:
+            lines.append(f"- chat is {mix}")
 
     return "\n" + "\n".join(lines) if lines else ""

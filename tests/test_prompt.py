@@ -1,0 +1,85 @@
+# ruff: noqa: RUF001
+# Reason: Cyrillic test data exercises the insights rendering.
+from __future__ import annotations
+
+from datetime import UTC, datetime
+
+from persona_rag.generate.prompt import _render_insights_block
+from persona_rag.insights.recency import RankedInsight
+
+
+def _ins(category: str, subject: str, text: str, score: float = 0.5) -> RankedInsight:
+    now = datetime.now(UTC)
+    return RankedInsight(
+        id=f"i-{subject}",
+        category=category,
+        subject=subject,
+        text=text,
+        confidence=1.0,
+        evidence_count=5,
+        earliest_date=now,
+        latest_date=now,
+        trajectory=None,
+        source="chat",
+        semantic_score=score,
+        final_score=score,
+    )
+
+
+def test_prompt_does_not_render_recurring_topics():
+    """Spec §5.1.c — the static entities line must be gone from runtime prompts."""
+    insights = {
+        "semantic": [_ins("interest", "running", "Bohdan runs")],
+        "static": {
+            "languages": [{"subject": "uk", "percentage": 0.6, "count": 100}],
+            "entities": [
+                {"subject": "мене", "count": 50},
+                {"subject": "тебе", "count": 40},
+            ],
+        },
+    }
+    out = _render_insights_block(insights)
+    assert "recurring topics" not in out
+    assert "мене" not in out and "тебе" not in out
+
+
+def test_prompt_keeps_language_mix():
+    """Language line still grounds primary-language choice; only entities go."""
+    insights = {
+        "semantic": [],
+        "static": {
+            "languages": [{"subject": "uk", "percentage": 0.6, "count": 100}],
+            "entities": [],
+        },
+    }
+    out = _render_insights_block(insights)
+    assert "uk" in out
+
+
+def test_prompt_splits_bio_from_other_categories():
+    """Spec §5.8 — bio insights render under their own header so the bio-anchor
+    priority rule has something to point at."""
+    insights = {
+        "semantic": [
+            _ins("bio", "school", "Bohdan attends North Royalton HS"),
+            _ins("interest", "running", "Bohdan runs"),
+            _ins("behavior", "planning", "Bohdan plans meticulously"),
+        ],
+        "static": {"languages": [], "entities": []},
+    }
+    out = _render_insights_block(insights)
+    assert "What's true about you (bio facts):" in out
+    assert "North Royalton" in out
+    assert "Things you talk about / are into:" in out
+    assert "Bohdan runs" in out
+    assert out.index("What's true about you") < out.index("Things you talk about")
+
+
+def test_prompt_omits_bio_header_when_no_bio_insights():
+    insights = {
+        "semantic": [_ins("interest", "running", "Bohdan runs")],
+        "static": {"languages": [], "entities": []},
+    }
+    out = _render_insights_block(insights)
+    assert "What's true about you" not in out
+    assert "Things you talk about / are into:" in out
