@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import contextlib
-
 from qdrant_client import QdrantClient
 
 from persona_rag.config import get_settings
@@ -53,20 +51,14 @@ async def retrieve(
 
     log = get_logger()
     mean_div = _mean_pairwise_distance([p.embedding for p in picked if p.embedding])
-    # Defensive suppress: structlog's PrintLogger caches sys.stdout at first
-    # use (cache_logger_on_first_use=True in persona_rag._logging). If a prior
-    # test captured stdout (e.g. pytest capsys/capfd) and the logger was warmed
-    # up against that captured stream, subsequent calls hit "I/O operation on
-    # closed file". Logging is observability — never let it break retrieve.
-    with contextlib.suppress(ValueError):
-        log.info(
-            "mmr_pick_done",
-            mmr_enabled=True,
-            mmr_pool_size=len(mmr_pool),
-            mmr_lambda=s.MMR_LAMBDA,
-            mmr_picked_ids=[p.turn.id for p in picked],
-            mmr_diversity_score=mean_div,
-        )
+    log.info(
+        "mmr_pick_done",
+        mmr_enabled=True,
+        mmr_pool_size=len(mmr_pool),
+        mmr_lambda=s.MMR_LAMBDA,
+        mmr_picked_ids=[p.turn.id for p in picked],
+        mmr_diversity_score=mean_div,
+    )
 
     picked.reverse()
     return picked
