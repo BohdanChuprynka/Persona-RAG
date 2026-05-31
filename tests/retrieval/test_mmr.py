@@ -150,3 +150,19 @@ def test_cosine_matches_numpy_reference():
     assert cosine([1.0, 1.0], [1.0, 0.0]) == pytest.approx(1.0 / (2**0.5))
     # Zero-vector edge case: defined to return 0.0 (avoids divide-by-zero).
     assert cosine([0.0, 0.0], [1.0, 0.0]) == 0.0
+
+
+def test_mmr_handles_candidates_without_embedding():
+    """Spec contract: BM25-only hits (embedding=None) rank by relevance only
+    and do not crash the diversity computation."""
+    pool = [
+        _rt("with_emb_high", 0.9, [1.0, 0.0]),
+        _rt("no_emb", 0.7, None),
+        _rt("with_emb_low", 0.5, [0.0, 1.0]),
+    ]
+    out = mmr_rerank(pool, k=3, lambda_param=0.6)
+    assert len(out) == 3
+    out_ids = {r.turn.id for r in out}
+    assert out_ids == {"with_emb_high", "no_emb", "with_emb_low"}
+    # First pick is always max-relevance
+    assert out[0].turn.id == "with_emb_high"

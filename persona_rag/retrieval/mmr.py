@@ -59,6 +59,9 @@ def mmr_rerank(
 
     scores = [c.score for c in candidates]
     s_min, s_max = min(scores), max(scores)
+    # 1e-9 floor guards against div-by-zero when every candidate has identical score
+    # (e.g. test_mmr_handles_zero_diversity_pool); relevance then becomes uniform 0
+    # for all picks and the diversity penalty alone determines order.
     s_range = max(s_max - s_min, 1e-9)
 
     def relevance(c: RetrievedTurn) -> float:
