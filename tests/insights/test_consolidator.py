@@ -112,3 +112,72 @@ def test_consolidate_prompt_has_preserve_specifics_rule():
     assert "preserve" in lower or "keep" in lower
     assert "concrete" in lower or "specific" in lower or "particulars" in lower
     assert "genre" in lower or "name" in lower or "number" in lower
+
+
+@pytest.mark.asyncio
+async def test_consolidate_computes_distinct_partners():
+    """Two sessions with the same partner → distinct_partners=1; different → 2."""
+    from datetime import UTC, datetime
+
+    from persona_rag.insights.consolidator import consolidate
+    from persona_rag.insights.extractor import RawInsight
+
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    raws = [
+        RawInsight(
+            session_id="s1",
+            category="interest",
+            subject="running",
+            text="runs",
+            confidence=0.9,
+            source_quote="бігаю",
+            extracted_at=now,
+        ),
+        RawInsight(
+            session_id="s2",
+            category="interest",
+            subject="running",
+            text="runs",
+            confidence=0.9,
+            source_quote="бігаю",
+            extracted_at=now,
+        ),
+    ]
+    out_same = await consolidate(
+        raws,
+        synonyms={},
+        session_to_partners={"s1": {"rcpt-A"}, "s2": {"rcpt-A"}},
+    )
+    assert len(out_same) == 1
+    assert out_same[0].distinct_partners == 1
+
+    out_diff = await consolidate(
+        raws,
+        synonyms={},
+        session_to_partners={"s1": {"rcpt-A"}, "s2": {"rcpt-B"}},
+    )
+    assert out_diff[0].distinct_partners == 2
+
+
+@pytest.mark.asyncio
+async def test_consolidate_defaults_partners_to_zero_when_no_mapping_given():
+    """Backward-compat: callers that don't pass session_to_partners get 0."""
+    from datetime import UTC, datetime
+
+    from persona_rag.insights.consolidator import consolidate
+    from persona_rag.insights.extractor import RawInsight
+
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    raws = [
+        RawInsight(
+            session_id="s1",
+            category="interest",
+            subject="running",
+            text="runs",
+            confidence=0.9,
+            source_quote="бігаю",
+            extracted_at=now,
+        )
+    ]
+    out = await consolidate(raws, synonyms={})
+    assert out[0].distinct_partners == 0

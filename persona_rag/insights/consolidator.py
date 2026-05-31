@@ -116,8 +116,14 @@ async def consolidate(
     raws: list[RawInsight],
     *,
     synonyms: dict[str, list[str]],
+    session_to_partners: dict[str, set[str]] | None = None,
 ) -> list[ConsolidatedInsight]:
-    """Group raw insights by (category, normalized_subject); merge groups of 3+ via LLM."""
+    """Group raw insights by (category, normalized_subject); merge groups of 3+ via LLM.
+
+    If `session_to_partners` is provided (spec 2026-05-31 §5.7), each
+    ConsolidatedInsight gets a `distinct_partners` count (unique
+    recipient_id_hash across its source sessions). Used by Stage E routing.
+    """
     from persona_rag.config import get_settings
 
     groups: dict[tuple[str, str], list[RawInsight]] = defaultdict(list)
@@ -176,6 +182,13 @@ async def consolidate(
             text = best.text
             trajectory = None
 
+        distinct_partners = 0
+        if session_to_partners is not None:
+            partners: set[str] = set()
+            for sid in session_ids:
+                partners |= session_to_partners.get(sid, set())
+            distinct_partners = len(partners)
+
         out.append(
             ConsolidatedInsight(
                 id=_stable_insight_id(category, canon),
@@ -188,6 +201,7 @@ async def consolidate(
                 latest_date=latest,
                 trajectory=trajectory,
                 source_session_ids=session_ids,
+                distinct_partners=distinct_partners,
             )
         )
     return out
