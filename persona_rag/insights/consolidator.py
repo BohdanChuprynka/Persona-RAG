@@ -66,6 +66,9 @@ class ConsolidatedInsight(BaseModel):
     latest_date: datetime
     trajectory: str | None
     source_session_ids: list[str]
+    # Spec 2026-05-31 §6.3: count of unique chat partners (recipient_id_hash)
+    # contributing source sessions. Used by Stage E to require breadth.
+    distinct_partners: int = 0
 
 
 CONSOLIDATE_PROMPT = """\

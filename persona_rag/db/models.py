@@ -102,6 +102,7 @@ class InsightRow(SQLModel, table=True):
     latest_date: datetime
     trajectory: str | None = None
     source_session_ids: str  # JSON list[str], empty list for onboarding
+    distinct_partners: int = Field(default=0)
     source: str = Field(index=True)  # chat|user_verified|onboarding
     review_status: str = Field(index=True)  # auto|pending|approved|rejected
     edited_text: str | None = None
@@ -138,6 +139,9 @@ class RawInsightRow(SQLModel, table=True):
     confidence: float
     source_quote: str
     extracted_at: datetime
+    source_quote_validated: bool = Field(default=False)
+    verification_verdict: str | None = Field(default=None)  # YES|NO|AMBIGUOUS
+    verification_reason: str | None = Field(default=None)
 
 
 class VerificationSession(SQLModel, table=True):

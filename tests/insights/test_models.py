@@ -9,8 +9,11 @@ from persona_rag.db.models import (
     AlgoSignal,
     InsightRow,
     InsightRunState,
+    RawInsightRow,
     VerificationSession,
 )
+from persona_rag.insights.consolidator import ConsolidatedInsight
+from persona_rag.insights.extractor import RawInsight
 
 
 def test_algo_signal_round_trip(tmp_path, monkeypatch):
@@ -113,3 +116,73 @@ def test_verification_session_round_trip(tmp_path):
         loaded = s.get(VerificationSession, 42)
     assert loaded is not None
     assert loaded.phase == "phase1_in_progress"
+
+
+def test_raw_insight_has_verification_fields():
+    r = RawInsight(
+        session_id="s1",
+        category="bio",
+        subject="school",
+        text="goes to school",
+        confidence=1.0,
+        source_quote="я в школі",
+        extracted_at=datetime.now(UTC),
+    )
+    assert r.source_quote_validated is False
+    assert r.verification_verdict is None
+    assert r.verification_reason is None
+
+
+def test_raw_insight_row_has_verification_columns():
+    r = RawInsightRow(
+        id="x1",
+        session_id="s1",
+        category="bio",
+        subject="school",
+        text="goes to school",
+        confidence=1.0,
+        source_quote="я в школі",
+        extracted_at=datetime.now(UTC),
+    )
+    assert r.source_quote_validated is False
+    assert r.verification_verdict is None
+    assert r.verification_reason is None
+
+
+def test_consolidated_insight_has_distinct_partners():
+    now = datetime.now(UTC)
+    ci = ConsolidatedInsight(
+        id="i1",
+        category="bio",
+        canonical_subject="school",
+        text="x",
+        confidence=1.0,
+        evidence_count=1,
+        earliest_date=now,
+        latest_date=now,
+        trajectory=None,
+        source_session_ids=["s1"],
+    )
+    assert ci.distinct_partners == 0
+
+
+def test_insight_row_has_distinct_partners():
+    now = datetime.now(UTC)
+    row = InsightRow(
+        id="x",
+        category="bio",
+        subject="school",
+        text="x",
+        confidence=1.0,
+        evidence_count=1,
+        earliest_date=now,
+        latest_date=now,
+        trajectory=None,
+        source_session_ids="[]",
+        source="chat",
+        review_status="auto",
+        edited_text=None,
+        created_at=now,
+        updated_at=now,
+    )
+    assert row.distinct_partners == 0

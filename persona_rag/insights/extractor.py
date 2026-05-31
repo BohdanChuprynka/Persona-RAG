@@ -56,6 +56,10 @@ class RawInsight(BaseModel):
     confidence: float
     source_quote: str
     extracted_at: datetime
+    # Spec 2026-05-31 §6.1: provenance + verification audit trail.
+    source_quote_validated: bool = False
+    verification_verdict: Literal["YES", "NO", "AMBIGUOUS"] | None = None
+    verification_reason: str | None = None
 
 
 def render_session(session: SessionDoc, persona_name: str) -> str:
