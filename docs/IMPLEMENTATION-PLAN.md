@@ -586,8 +586,8 @@ from persona_rag.ingest.pii import redact
 
 
 def test_redact_phone():
-    out = redact("call me at +12163761384 please")
-    assert "+12163761384" not in out
+    out = redact("call me at +15555550100 please")
+    assert "+15555550100" not in out
     assert "<REDACTED>" in out
 
 

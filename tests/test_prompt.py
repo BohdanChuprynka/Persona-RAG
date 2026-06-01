@@ -61,7 +61,7 @@ def test_prompt_splits_bio_from_other_categories():
     priority rule has something to point at."""
     insights = {
         "semantic": [
-            _ins("bio", "school", "Bohdan attends North Royalton HS"),
+            _ins("bio", "school", "Bohdan attends Lincoln HS"),
             _ins("interest", "running", "Bohdan runs"),
             _ins("behavior", "planning", "Bohdan plans meticulously"),
         ],
@@ -69,7 +69,7 @@ def test_prompt_splits_bio_from_other_categories():
     }
     out = _render_insights_block(insights)
     assert "What's true about you (bio facts):" in out
-    assert "North Royalton" in out
+    assert "Lincoln" in out
     assert "Things you talk about / are into:" in out
     assert "Bohdan runs" in out
     assert out.index("What's true about you") < out.index("Things you talk about")

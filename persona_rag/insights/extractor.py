@@ -53,7 +53,7 @@ Rules:
   turns are NEVER valid — those are someone else's words, not
   {persona_name}'s.
 - Third-party rule: if a `Contact-XXXX:` turn names another person doing
-  something ("Pennel плаває", "Oleksiy грає"), do NOT attribute that
+  something ("Person-A плаває", "Person-B грає"), do NOT attribute that
   activity to {persona_name} even if {persona_name} is in the conversation.
   Skip it.
 - Affirmation rule: when a `Contact-XXXX:` introduces a topic and the next

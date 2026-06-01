@@ -73,8 +73,11 @@ PROMPTS: list[tuple[str, str]] = [
 ]
 
 
-# Bohdan's own Telegram ID (already whitelisted in the auth table).
-WHITELISTED_USER_ID = 1037155651
+# Persona owner's Telegram ID (already whitelisted in the auth table). Read
+# from settings so this script doesn't carry a hardcoded personal identifier.
+from persona_rag.config import get_settings  # noqa: E402
+
+WHITELISTED_USER_ID = get_settings().ADMIN_TELEGRAM_ID
 SCRATCH_CHAT_ID_BASE = 990_000_000
 
 
