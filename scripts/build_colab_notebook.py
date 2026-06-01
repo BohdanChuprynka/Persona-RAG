@@ -46,15 +46,15 @@ CELLS = [
         "# Persona LoRA — train a model to text like you",
         "",
         "**You're needed 3 times, then walk away:**",
-        "1. ⏸️ **Restart the runtime** after the install cell.",
-        "2. 📤 **Upload** `train.jsonl` + `eval.jsonl`.",
-        "3. 📂 **Authorize Google Drive**.",
+        "1. **Restart the runtime** after the install cell.",
+        "2. **Upload** `train.jsonl` + `eval.jsonl`.",
+        "3. **Authorize Google Drive**.",
         "",
         "Training is hands-free after that — checkpoints to Drive, auto-resumes if the T4 drops.",
         "",
         "First: **Runtime → Change runtime type → T4 GPU**.",
     ),
-    md("## 1. Install — then ⏸️ RESTART"),
+    md("## 1. Install — then restart the runtime"),
     code(
         "# Lift Colab's version cap + force the upgrade. Restart the runtime after this.",
         "!PIP_CONSTRAINT= pip install -q --upgrade --upgrade-strategy eager unsloth unsloth_zoo transformers trl peft protobuf",
@@ -66,7 +66,7 @@ CELLS = [
         "        print(f'{_p:13s} ??', _e)",
     ),
     md(
-        "## ⏸️ RESTART NOW → `Runtime → Restart session`",
+        "## Restart now: `Runtime → Restart session`",
         "Then run from the next cell. **Do not** re-run the install cell.",
     ),
     code(
@@ -77,7 +77,7 @@ CELLS = [
         ")",
         'print("OK — unsloth ready")',
     ),
-    md("## 2. 📤 Upload `train.jsonl` + `eval.jsonl`"),
+    md("## 2. Upload `train.jsonl` + `eval.jsonl`"),
     code(
         "from google.colab import files",
         "uploaded = files.upload()",
@@ -128,7 +128,7 @@ CELLS = [
         "ds = ds.map(_fmt, batched=True)",
         'print("examples:", len(ds))',
     ),
-    md("## 6. 📂 Authorize Google Drive (checkpoints live here)"),
+    md("## 6. Authorize Google Drive (checkpoints live here)"),
     code(
         "from google.colab import drive",
         "import os",
@@ -184,7 +184,7 @@ CELLS = [
         "print(tokenizer.decode(kept))",
     ),
     md(
-        "## 8. ✅ Train — walk away now",
+        "## 8. Train — walk away now",
         "Resumes from the last Drive checkpoint if the T4 drops (reconnect → Run all → it continues).",
     ),
     code(
