@@ -67,8 +67,10 @@ noisy at small n and recipient-dependent — treat `shape_js`, per-bubble length
 
 ```bash
 # 1. (local) export real pairs → ShareGPT JSONL (cleans <REDACTED>/URL leaks,
-#    recipient-stratified split, prints the honest register-matched target)
-uv run python scripts/export_finetune_data.py        # -> data/finetune/{train,eval}.jsonl
+#    recipient-stratified split, prints the honest register-matched target).
+#    --since-months trains on CURRENT-you: code-switch climbs ~0.20 all-time →
+#    ~0.28 over 12mo → ~0.43 over 3mo, so all-time sounds dated. 12 is a good default.
+uv run python scripts/export_finetune_data.py --since-months 12   # -> data/finetune/{train,eval}.jsonl
 
 # 2. open notebooks/finetune_persona_colab.ipynb in Colab, Runtime -> T4 GPU,
 #    upload train.jsonl AND eval.jsonl. Run all cells. It trains, then prints an

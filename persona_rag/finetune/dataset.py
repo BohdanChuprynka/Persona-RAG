@@ -19,6 +19,7 @@ import hashlib
 import json
 import re
 from collections.abc import Iterator
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -49,6 +50,13 @@ def clean_reply(reply: str) -> str | None:
     lines = [_MULTISPACE.sub(" ", ln).strip() for ln in cleaned.split("\n")]
     out = "\n".join(ln for ln in lines if ln).strip()
     return out or None
+
+
+def within_months(ts: datetime, newest: datetime, months: int) -> bool:
+    """True if ``ts`` falls within the last ``months`` (30-day months) before
+    ``newest``. Used to train on current-you: Bohdan's code-switch climbs from
+    ~0.20 all-time to ~0.30 over the last year, so an all-time mix sounds dated."""
+    return ts >= newest - timedelta(days=30 * months)
 
 
 def eval_split_for(turn_id: str, frac: float = 0.1) -> bool:
@@ -86,12 +94,14 @@ def iter_records(
     min_reply_chars: int,
     max_ctx_chars: int,
     eval_frac: float = 0.1,
+    since_months: int | None = None,
 ) -> Iterator[dict[str, Any]]:
     """Yield cleaned ShareGPT records for the requested split.
 
     The split is computed by ``eval_split_for`` (recipient-stratified hash), NOT
     the DB ``eval_split`` column (a temporal tail that skewed the target). Every
-    reply is run through ``clean_reply`` first.
+    reply is run through ``clean_reply`` first. ``since_months`` keeps only turns
+    from the last N months (measured from the newest turn) — train on current-you.
     """
     from sqlmodel import Session, select
 
@@ -100,6 +110,9 @@ def iter_records(
 
     with Session(make_engine()) as s:
         rows = list(s.exec(select(PersonaTurnRow)).all())
+    if since_months is not None and rows:
+        newest = max(r.timestamp for r in rows)
+        rows = [r for r in rows if within_months(r.timestamp, newest, since_months)]
     for r in rows:
         if eval_split_for(r.id, eval_frac) != eval_split:
             continue
