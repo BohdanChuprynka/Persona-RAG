@@ -1,15 +1,35 @@
-"""Eval CLI for Persona-RAG.
+"""Persona-accuracy eval for Persona-RAG.
 
-Loads held-out persona turns from SQLite, generates replies via the LangGraph,
-computes stylometric MAD vs real replies, logs run to MLflow.
+Samples held-out persona turns (eval_split=1), replays each through the full
+LangGraph with its REAL prior context injected as session, and scores the
+generated replies against the real ones by *distribution* (message-shape,
+per-bubble length, punctuation, code-switch, opener monotony) — not
+mean-of-means, which is blind to the shape-uniformity failure. Optionally adds
+a style-embedding "is this me?" cosine (style_self_sim) when the authorship
+scorer + its model are available.
+
+Outputs under data/eval/<name>/:
+  - pairs.csv      (incoming, real, generated) for blind real-vs-generated A/B
+  - scorecard.json (distributional distances + params)
+and prints a human scorecard.
+
+    uv run python scripts/eval_persona.py --n 80 --seed 0 --name baseline
+    uv run python scripts/eval_persona.py --n 80 --name reg-off --register off
 """
 
 from __future__ import annotations
 
+# Shadow mode BEFORE importing settings-readers: the graph skips the Telegram
+# round-trip and we read state["reply"] directly (no bot needed).
+import os
+
+os.environ.setdefault("SHADOW_MODE", "true")
+
 import argparse
 import asyncio
 import json
-from datetime import datetime
+import random
+from datetime import UTC, datetime
 from pathlib import Path
 
 from sqlmodel import Session, select
@@ -18,86 +38,216 @@ from persona_rag._logging import configure_logging, get_logger
 from persona_rag.config import get_settings
 from persona_rag.db.engine import make_engine
 from persona_rag.db.models import PersonaTurnRow
-from persona_rag.eval.mlflow_wrap import log_eval_run
-from persona_rag.eval.stylometry import mean_abs_deviation
+from persona_rag.eval.distribution import persona_distance
 from persona_rag.graph.compile import build_graph
+from persona_rag.graph.nodes.load_session import SessionEntry, get_sessions
+from persona_rag.models import ChatMessage
 
 log = get_logger()
 
 
-async def _run_stylometry(run_name: str) -> None:
-    s = get_settings()
+def _admin_id() -> int:
+    """Bohdan's own (whitelisted) Telegram id — read from settings, never
+    hardcoded, so the privacy scrub holds."""
+    return get_settings().ADMIN_TELEGRAM_ID
+
+
+def _sample_held_out(n: int, seed: int) -> list[PersonaTurnRow]:
     with Session(make_engine()) as sess:
-        held_out = list(
+        rows = list(
             sess.exec(
                 select(PersonaTurnRow).where(PersonaTurnRow.eval_split == True)  # noqa: E712
             ).all()
         )
-    if not held_out:
+    # Need something to reply to and a real reply to compare against.
+    usable = [
+        r for r in rows if (r.your_reply or "").strip() and json.loads(r.incoming_context_json)
+    ]
+    rng = random.Random(seed)
+    rng.shuffle(usable)
+    return usable[:n]
+
+
+def _seed_context(ctx: list[str]) -> str:
+    """Inject the lead-up messages as session history; return the final
+    incoming message. ctx is chronological; ctx[-1] is what we directly reply to."""
+    sessions = get_sessions()
+    sessions.clear()
+    if len(ctx) > 1:
+        msgs = [ChatMessage(role="user", content=c) for c in ctx[:-1] if c.strip()]
+        if msgs:
+            sessions[_admin_id()] = SessionEntry(messages=msgs, last_seen=datetime.now(UTC))
+    return ctx[-1]
+
+
+async def _generate(graph, turn: PersonaTurnRow) -> tuple[str, str, str]:
+    ctx = json.loads(turn.incoming_context_json)
+    incoming = _seed_context(ctx)
+    out = await graph.ainvoke({"user_id": _admin_id(), "chat_id": 0, "incoming": incoming})
+    return incoming, turn.your_reply, (out.get("reply") or "")
+
+
+def _style_self_sim(real: list[str], gen: list[str]) -> float | None:
+    """Mean style-embedding cosine of generated replies to Bohdan's voice
+    centroid. None when the optional authorship scorer/model isn't available."""
+    try:
+        from persona_rag.eval.authorship import reference_vector, self_similarity
+    except Exception as e:
+        log.info("style_scorer_unavailable", reason=str(e)[:120])
+        return None
+    try:
+        ref = reference_vector(real)
+        return self_similarity(gen, ref)
+    except Exception as e:
+        log.warning("style_scorer_failed", error=str(e)[:160])
+        return None
+
+
+async def run(name: str, n: int, seed: int) -> None:
+    s = get_settings()
+    turns = _sample_held_out(n, seed)
+    if not turns:
         log.warning("no_eval_turns", message="Run ingest first")
         return
-
     graph = build_graph()
-    generated: list[str] = []
-    real: list[str] = []
-    for row in held_out[:50]:  # cap for speed
-        ctx = json.loads(row.incoming_context_json)
-        incoming = ctx[-1] if ctx else ""
-        final = await graph.ainvoke(
-            {"user_id": s.ADMIN_TELEGRAM_ID, "chat_id": 0, "incoming": incoming},
-        )
-        gen = final.get("reply", "")
-        if gen:
-            generated.append(gen)
-            real.append(row.your_reply)
 
-    if not generated:
+    incomings: list[str] = []
+    real: list[str] = []
+    gen: list[str] = []
+    for i, t in enumerate(turns, 1):
+        try:
+            inc, r, g = await _generate(graph, t)
+        except Exception as e:
+            log.warning("gen_failed", i=i, error=str(e)[:200])
+            continue
+        if not g:
+            continue
+        incomings.append(inc)
+        real.append(r)
+        gen.append(g)
+        if i % 20 == 0:
+            log.info("eval_progress", done=i, n=len(turns), kept=len(gen))
+
+    if not gen:
         log.warning("no_replies_generated")
         return
 
-    mad = mean_abs_deviation(generated, real)
-    composite = sum(mad.values())
+    dist = persona_distance(real, gen)
+    style_sim = _style_self_sim(real, gen)
 
-    metrics = {f"stylometry_{k}_mad": v for k, v in mad.items()}
-    metrics["stylometry_composite"] = composite
-    params = {
-        "top_k": s.TOP_K,
-        "alpha": s.HYBRID_DENSE_ALPHA,
-        "model": s.OPENAI_CHAT_MODEL,
-        "temperature": s.TEMPERATURE,
-        "n_eval_turns": len(generated),
+    out_dir = Path("data/eval") / name
+    out_dir.mkdir(parents=True, exist_ok=True)
+    # json-encode each cell so embedded newlines/commas survive the CSV
+    with (out_dir / "pairs.csv").open("w") as f:
+        f.write("incoming,real,generated\n")
+        for inc, r, g in zip(incomings, real, gen, strict=True):
+            cells = [json.dumps(x, ensure_ascii=False) for x in (inc, r, g)]
+            f.write(",".join(cells) + "\n")
+
+    scorecard = {
+        "name": name,
+        "n_generated": len(gen),
+        "seed": seed,
+        "params": {
+            "top_k": s.TOP_K,
+            "alpha": s.HYBRID_DENSE_ALPHA,
+            "mmr_enabled": getattr(s, "MMR_ENABLED", None),
+            "register_aware": getattr(s, "REGISTER_AWARE_ENABLED", None),
+            "shape_hint": getattr(s, "SHAPE_HINT_ENABLED", None),
+            "best_of_n": getattr(s, "BEST_OF_N", None),
+            "paren_logit_bias": getattr(s, "PAREN_LOGIT_BIAS", None),
+            "model": s.OPENAI_CHAT_MODEL,
+            "temperature": s.TEMPERATURE,
+            "score_floor": s.HYBRID_SCORE_FLOOR,
+        },
+        "distance": dist,
+        "style_self_sim": style_sim,
+        "ts": datetime.now(UTC).isoformat(timespec="seconds"),
     }
-    tags = {"persona_name": s.PERSONA_NAME, "prompt_version": "v1"}
+    (out_dir / "scorecard.json").write_text(json.dumps(scorecard, ensure_ascii=False, indent=2))
+    _print_scorecard(scorecard)
 
-    report_dir = Path("data/eval")
-    report_dir.mkdir(parents=True, exist_ok=True)
-    csv_path = report_dir / f"{run_name}-pairs.csv"
-    with csv_path.open("w") as f:
-        f.write("real,generated\n")
-        for r, g in zip(real, generated, strict=True):
-            f.write(f"{json.dumps(r)},{json.dumps(g)}\n")
 
-    run_id = log_eval_run(
-        run_name=run_name,
-        params=params,
-        metrics=metrics,
-        tags=tags,
-        artifacts=[csv_path],
+def _print_scorecard(sc: dict) -> None:
+    d = sc["distance"]
+    rs, gs = d["real"], d["gen"]
+    print(f"\n{'=' * 56}")
+    print(f"  PERSONA SCORECARD — {sc['name']}  (n={sc['n_generated']})")
+    print(f"{'=' * 56}")
+    print(
+        f"  model={sc['params']['model']}  top_k={sc['params']['top_k']}  "
+        f"mmr={sc['params']['mmr_enabled']}  reg={sc['params']['register_aware']}  "
+        f"temp={sc['params']['temperature']}"
     )
-    log.info("eval_logged", run_id=run_id, composite=composite)
+    print("\n  HEADLINE DISTANCES (lower = more like Bohdan):")
+    print(f"    shape_js          {d['shape_js']:.4f}   (message-count distribution)")
+    print(f"    len_wasserstein   {d['len_wasserstein']:.2f}   (per-bubble char length)")
+    print(f"    len_ks            {d['len_ks']:.4f}")
+    if sc.get("style_self_sim") is not None:
+        print(f"    style_self_sim    {sc['style_self_sim']:.4f}   (HIGHER=more like me)")
+    print("\n  SHAPE — % single-message replies:")
+    pr, pg = d["pct_single_real"] * 100, d["pct_single_gen"] * 100
+    print(f"    real {pr:5.1f}%   vs   generated {pg:5.1f}%")
+    print("\n  shape histogram (bubbles per reply):")
+    print(f"    {'bucket':>7} | {'real':>7} | {'gen':>7}")
+    for b in range(1, 7):
+        rv = rs["shape_hist"].get(str(b), rs["shape_hist"].get(b, 0.0))
+        gv = gs["shape_hist"].get(str(b), gs["shape_hist"].get(b, 0.0))
+        print(f"    {b:>7} | {rv * 100:6.1f}% | {gv * 100:6.1f}%")
+    print(
+        f"\n  per-bubble length:  real median={rs['bubble_len_median']:.0f} "
+        f"mean={rs['bubble_len_mean']:.0f}   gen median={gs['bubble_len_median']:.0f} "
+        f"mean={gs['bubble_len_mean']:.0f}"
+    )
+    print(
+        f"  caps ratio:         real={rs['caps_ratio_mean']:.3f}   "
+        f"gen={gs['caps_ratio_mean']:.3f}"
+    )
+    print(
+        f"  emoji rate:         real={rs['emoji_rate_mean']:.4f}   "
+        f"gen={gs['emoji_rate_mean']:.4f}"
+    )
+    print(
+        f"  paren-smiley ):     real={rs.get('paren_smiley_rate', 0):.3f}   "
+        f"gen={gs.get('paren_smiley_rate', 0):.3f}"
+    )
+    print(
+        f"  latin-script rate:  real={rs.get('latin_script_rate', 0):.3f}   "
+        f"gen={gs.get('latin_script_rate', 0):.3f}   (code-switch)"
+    )
+    print(
+        f"  top-opener share:   real={rs.get('opener_top_share', 0):.3f}   "
+        f"gen={gs.get('opener_top_share', 0):.3f}   (monotony)"
+    )
+    print(f"{'=' * 56}\n")
 
 
 def main() -> None:
     configure_logging()
     p = argparse.ArgumentParser()
-    p.add_argument("--metric", choices=["stylometry"], default="stylometry")
+    p.add_argument("--n", type=int, default=80)
+    p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--name", default=datetime.now().strftime("%Y%m%d-%H%M") + "-baseline")
     p.add_argument(
-        "--name",
-        default=f"{datetime.now().strftime('%Y-%m-%d-%H%M')}-baseline",
+        "--model",
+        default=None,
+        help="Override the generation model for this eval only (e.g. gpt-4o-mini "
+        "for cheap iteration). Does not touch the live bot's .env.",
+    )
+    p.add_argument(
+        "--register",
+        choices=["on", "off"],
+        default=None,
+        help="Toggle REGISTER_AWARE_ENABLED for this eval only (A/B the tone fix).",
     )
     args = p.parse_args()
-    if args.metric == "stylometry":
-        asyncio.run(_run_stylometry(args.name))
+    if args.model:
+        os.environ["OPENAI_CHAT_MODEL"] = args.model
+    if args.register:
+        os.environ["REGISTER_AWARE_ENABLED"] = "true" if args.register == "on" else "false"
+    if args.model or args.register:
+        get_settings.cache_clear()
+    asyncio.run(run(args.name, args.n, args.seed))
 
 
 if __name__ == "__main__":

@@ -87,6 +87,16 @@ class Settings(BaseSettings):
     # drops the brevity cap and injects an engagement directive so the bot
     # stops brushing off vulnerable messages with a flippant one-liner.
     REGISTER_AWARE_ENABLED: bool = True
+    # Decoding-side voice levers (research item 3). Both default-off so the live
+    # bot is unchanged until measured.
+    #   PAREN_LOGIT_BIAS: positive OpenAI logit bias (1..5 sane) on the ")" /
+    #     "))" tokens to nudge Bohdan's paren-smiley tic. 0 = off.
+    #   BEST_OF_N: sample N candidates and keep the one closest to Bohdan's
+    #     style centroid (needs the authorship scorer). 1 = off. Multiplies
+    #     generation token cost by N — keep small.
+    PAREN_LOGIT_BIAS: int = 0
+    BEST_OF_N: int = 1
+    BEST_OF_N_TEMPERATURE: float = 1.0
     # Real chat behavior: split replies on \n and send each fragment as
     # its own Telegram message, with a small human-like typing delay
     # between them. Disable to keep everything in one bubble.
