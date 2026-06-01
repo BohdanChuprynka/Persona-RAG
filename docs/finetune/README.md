@@ -76,13 +76,14 @@ uv run python scripts/export_finetune_data.py --since-months 12   # -> data/fine
 #    upload train.jsonl AND eval.jsonl. Run all cells. It trains, then prints an
 #    in-notebook VOICE_DISTANCE before you download anything, then emits a GGUF.
 
-# 3. (local) install into Ollama
+# 3. (local) install into Ollama (start `ollama serve` in another terminal first)
 unzip bohdan-lora-gguf.zip -d bohdan-gguf && cd bohdan-gguf
 ollama create bohdan -f Modelfile
 
-# 4. point the bot at it (.env)
-GENERATION_BACKEND=ollama
-OLLAMA_MODEL=bohdan
+# 4. run the SAME Telegram pipeline on the local model — no .env edits needed.
+#    --local forces GENERATION_BACKEND=ollama, folds contact facts into the thin
+#    system turn, skips the (unused) few-shot retrieval, and preflights the model.
+make run-local            # == python -m persona_rag.bot.main --local
 
 # 5. grade it (now graded through the THIN prompt, its native condition)
 uv run python scripts/eval_persona.py --n 200 --name lora-v1
@@ -126,17 +127,31 @@ sit closest to the reference — **not** the lowest train loss.
 
 ## How it plugs in
 
-Flipping `GENERATION_BACKEND=ollama` swaps the generator for the local LoRA via
-Ollama's OpenAI-compatible API. Retrieval, the insights layer, register
-detection and shape-conditioning are **bypassed for prompt construction** on this
-path (the LoRA carries voice + shape itself), but the **post-generation
-guardrails and bubble-splitting still run** — PII redaction and burst delivery
-are unchanged. `voice_logit_bias` is OpenAI-only (its tiktoken token ids are
-wrong for Qwen, and Ollama ignores `logit_bias` anyway; the `)` tic and the
-absence of `!` are learned straight from the data). This "fine-tune-for-voice +
-RAG-for-facts" split is the consensus architecture from the research; set
-`OLLAMA_FACTS_IN_SYSTEM=true` to fold a short facts addendum into the system turn
-if you want RAG facts on the LoRA path (mild train/serve trade-off).
+`make run-local` (or `python -m persona_rag.bot.main --local`) runs the same
+Telegram pipeline against the local LoRA via Ollama's OpenAI-compatible API. The
+flag forces `GENERATION_BACKEND=ollama` and sets `OLLAMA_FACTS_IN_SYSTEM=true`,
+then **preflights** the Ollama server at startup — if it's down or the model
+isn't installed, you get the exact `ollama serve` / `ollama create` fix command
+instead of an opaque 500 mid-chat (`persona_rag/generate/ollama_health.py`). It's
+a preflight, not a process manager: the bot never spawns or owns `ollama serve`.
+
+On the ollama path the graph **skips the few-shot retrieval node entirely**
+(`_route_after_auth` routes `auth → load_memory`): the LoRA serves the thin
+prompt and never injects retrieved turns, so `retrieve_hybrid` was dead weight —
+and its per-message embedding was the only generation-side OpenAI call. Register
+detection and shape-conditioning are likewise **bypassed for prompt
+construction** (the LoRA carries voice + shape itself), while the
+**post-generation guardrails and bubble-splitting still run** — PII redaction and
+burst delivery are unchanged. `voice_logit_bias` is OpenAI-only (its tiktoken
+token ids are wrong for Qwen, and Ollama ignores `logit_bias` anyway; the `)` tic
+and the absence of `!` are learned straight from the data).
+
+This "fine-tune-for-voice + RAG-for-facts" split is the consensus architecture
+from the research. The facts layer (`load_memory` + `retrieve_insights`) is kept
+and folded into the thin system turn, so the bot still knows contact-specific
+facts — at the cost of a small OpenAI **embedding** call for insight lookup
+(`OPENAI_API_KEY` stays required; set `OLLAMA_FACTS_IN_SYSTEM=false` to drop even
+that and run the voice clone alone).
 
 ## If it still drifts generic (ORPO escalation)
 
