@@ -283,12 +283,14 @@ def build_messages(
     register = detect_register(incoming) if s.REGISTER_AWARE_ENABLED else "casual"
     if register == "serious":
         msgs.append({"role": "system", "content": _engagement_directive()})
-    elif s.SHAPE_HINT_ENABLED:
+    else:
         # Shape hint: match the message-count of the moment, read off the
         # retrieved examples. The model won't single-message on its own.
-        n = target_bubbles([r.turn.your_reply for r in retrieved])
-        if n:
-            msgs.append({"role": "system", "content": _shape_directive(n)})
+        if s.SHAPE_HINT_ENABLED:
+            n = target_bubbles([r.turn.your_reply for r in retrieved])
+            if n:
+                msgs.append({"role": "system", "content": _shape_directive(n)})
+        # Fire-back nudge is independent of the shape toggle (code-review #3).
         if register == "heated":
             msgs.append({"role": "system", "content": _heated_directive()})
 

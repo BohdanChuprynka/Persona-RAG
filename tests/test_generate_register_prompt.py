@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from persona_rag.config import get_settings
 from persona_rag.generate.prompt import build_messages
 from persona_rag.models import PersonaTurn, RetrievedTurn, StyleAnchors
 
@@ -79,6 +80,18 @@ def test_heated_gets_fireback_nudge_not_engagement() -> None:
     blob = _sys_blob("сам ти даун", [_r("норм", "як"), _r("ок", "шо")])
     assert "they came at you" in blob  # heated directive
     assert "opening up" not in blob
+
+
+def test_heated_nudge_survives_shape_hint_off(monkeypatch) -> None:
+    # code-review #3: the fire-back nudge must not be coupled to SHAPE_HINT_ENABLED
+    monkeypatch.setenv("REGISTER_AWARE_ENABLED", "true")
+    monkeypatch.setenv("SHAPE_HINT_ENABLED", "false")
+    get_settings.cache_clear()
+    try:
+        blob = _sys_blob("сам ти даун", [_r("норм", "як")])
+        assert "they came at you" in blob
+    finally:
+        get_settings.cache_clear()
 
 
 def test_last_message_is_the_incoming_even_when_serious() -> None:

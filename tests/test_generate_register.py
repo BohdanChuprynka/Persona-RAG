@@ -57,3 +57,26 @@ class TestDetectRegister:
 
     def test_empty_is_casual(self) -> None:
         assert detect_register("") == "casual"
+
+    # Precision guards (code-review #2): casual / technical / negated / resolved
+    # text that merely contains a marker substring must NOT become serious.
+    def test_technical_question_is_casual(self) -> None:
+        assert detect_register("не знаю як це працює в коді") == "casual"
+
+    def test_playful_hypothetical_is_casual(self) -> None:
+        assert detect_register("що робити якщо я виграю") == "casual"
+
+    def test_negated_fear_is_casual(self) -> None:
+        assert detect_register("та норм, не страшно") == "casual"
+
+    def test_negated_hard_is_casual(self) -> None:
+        assert detect_register("мені не важко це зробити") == "casual"
+
+    def test_negated_problem_is_casual(self) -> None:
+        assert detect_register("ну це не проблема") == "casual"
+
+    def test_resolved_problem_is_casual(self) -> None:
+        assert detect_register("я вирішив проблеми вже") == "casual"
+
+    def test_bored_filler_is_casual(self) -> None:
+        assert detect_register("відос набридло") == "casual"

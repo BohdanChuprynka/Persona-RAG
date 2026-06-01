@@ -21,6 +21,7 @@ their mere presence.
 
 from __future__ import annotations
 
+import re
 from typing import Literal
 
 Register = Literal["heated", "serious", "casual"]
@@ -69,20 +70,23 @@ _HEATED = (
 # Distress, help-seeking, emotional disclosure, reflective self-doubt. The
 # presence of any one of these flips an incoming to "serious".
 _SERIOUS = (
-    # help-seeking
+    # help-seeking (specific phrasings; bare "що робити" / "не знаю як" are too
+    # broad — they match technical or playful questions)
     "що мені робити",
     "шо мені робити",
-    "що робити",
-    "шо робити",
-    "не знаю що",
-    "не знаю шо",
-    "не знаю як",
+    "не знаю що робити",
+    "не знаю шо робити",
     "не знаю навіщо",
     "що зі мною",
     "як мені бути",
-    # problem framing (with the -а/-и ending, so casual "нема проблем" is excluded)
-    "проблема",
-    "проблеми",
+    # problem framing — first-person framed only, so "не проблема",
+    # "вирішив проблеми" and "проблема з інтернетом" don't trip it
+    "в мене проблема",
+    "у мене проблема",
+    "така проблема",
+    "моя проблема",
+    "проблема в тому",
+    "проблема в тім",
     # compulsion / loss of control
     "не можу перестати",
     "не можу зупин",
@@ -107,7 +111,6 @@ _SERIOUS = (
     "паніку",
     "ненавиджу себе",
     "не хочу жити",
-    "набридло",
     # own-state profanity = pain, not an attack
     "хуєво",
     "хуево",
@@ -137,19 +140,38 @@ _SERIOUS = (
 )
 
 
+# A serious marker immediately preceded by a standalone "не" is a negation
+# ("не страшно", "не важко") and must NOT flip the message to serious.
+_NEG_BEFORE = re.compile(r"(?:^|\s)не\s+$")
+
+
+def _has_unnegated(text: str, markers: tuple[str, ...]) -> bool:
+    """True if any marker occurs at least once NOT directly negated by 'не'."""
+    for m in markers:
+        start = 0
+        while True:
+            i = text.find(m, start)
+            if i == -1:
+                break
+            if not _NEG_BEFORE.search(text[:i]):
+                return True
+            start = i + 1
+    return False
+
+
 def detect_register(incoming: str, context: list[str] | None = None) -> Register:
     """Classify the incoming message's register.
 
     heated is checked first: an insult fires back even if the message is also
     long and questiony (we don't counsel someone who's attacking us). Otherwise
-    a distress/help-seeking/reflective marker makes it serious. Everything else
-    is casual — the common case.
+    an un-negated distress/help-seeking/reflective marker makes it serious.
+    Everything else is casual — the common case.
     """
     text = (incoming or "").lower()
     if not text.strip():
         return "casual"
     if any(tok in text for tok in _HEATED):
         return "heated"
-    if any(tok in text for tok in _SERIOUS):
+    if _has_unnegated(text, _SERIOUS):
         return "serious"
     return "casual"
