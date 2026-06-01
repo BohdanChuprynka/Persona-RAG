@@ -57,9 +57,11 @@ CELLS = [
     md("## 1. Install — then restart the runtime"),
     code(
         "# Lift Colab's version cap + force the upgrade. Restart the runtime after this.",
-        "!PIP_CONSTRAINT= pip install -q --upgrade --upgrade-strategy eager unsloth unsloth_zoo transformers trl peft protobuf",
+        "# accelerate/bitsandbytes/datasets are included so they match transformers 5.x",
+        "# (an older accelerate fails later with: AcceleratorState has no attribute 'is_fsdp2').",
+        "!PIP_CONSTRAINT= pip install -q --upgrade --upgrade-strategy eager unsloth unsloth_zoo transformers trl peft accelerate bitsandbytes datasets protobuf",
         "import importlib.metadata as _m",
-        "for _p in ['unsloth', 'transformers', 'trl', 'peft', 'torch', 'protobuf']:",
+        "for _p in ['unsloth', 'transformers', 'trl', 'peft', 'accelerate', 'bitsandbytes', 'torch']:",
         "    try:",
         "        print(f'{_p:13s}', _m.version(_p))",
         "    except Exception as _e:",
