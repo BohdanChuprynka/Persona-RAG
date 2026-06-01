@@ -33,6 +33,12 @@ def main() -> None:
     args = p.parse_args()
 
     system = None if args.no_system else DEFAULT_SYSTEM
+    if args.no_system:
+        print(
+            "WARNING: --no-system omits the persona anchor. Qwen's chat template then "
+            "injects its OWN default 'You are Qwen...' system at train time, which will "
+            "NOT match the THIN_SYSTEM the bot serves. Only use this to A/B deliberately."
+        )
     out_dir = Path(args.out)
 
     train = list(
