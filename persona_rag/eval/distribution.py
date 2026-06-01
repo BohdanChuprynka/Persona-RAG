@@ -20,9 +20,6 @@ from typing import Any
 from persona_rag.eval.stylometry import compute_features
 from persona_rag.generate.bubbles import count_bubbles, split_bubbles
 
-# Paren-smiley: a ) or )) used as a smiley — a non-space/non-open-paren char
-# followed by a close paren not followed by a word char, or a bare )) run.
-_PAREN_SMILEY = re.compile(r"\)\)+|[^\s(]\)(?!\w)")
 _WORD = re.compile(r"[^\W\d_]+", re.UNICODE)
 _LATIN = re.compile(r"[a-z]")
 _CYRILLIC = re.compile(r"[Ѐ-ӿ]")
@@ -71,13 +68,19 @@ def bubble_count(text: str) -> int:
     return count_bubbles(text)
 
 
+def _has_paren_smiley(bubble: str) -> bool:
+    """A trailing ')' / '))' smiley is an UNBALANCED close paren. Ordinary
+    parentheticals '(...)' are balanced and must not count (code-review #6)."""
+    return bubble.count(")") > bubble.count("(")
+
+
 def paren_smiley_rate(texts: list[str]) -> float:
     """Fraction of bubbles containing a paren-smiley — Bohdan's signature tic
     that the emoji-codepoint metric is blind to."""
     bubbles = [b for t in texts for b in split_bubbles(t)]
     if not bubbles:
         return 0.0
-    return sum(1 for b in bubbles if _PAREN_SMILEY.search(b)) / len(bubbles)
+    return sum(1 for b in bubbles if _has_paren_smiley(b)) / len(bubbles)
 
 
 def per_bubble_lengths(texts: list[str]) -> list[int]:

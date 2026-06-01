@@ -157,6 +157,19 @@ class TestParenSmiley:
     def test_empty(self) -> None:
         assert paren_smiley_rate([]) == 0.0
 
+    # code-review #6: a balanced parenthetical is NOT the smiley tic.
+    def test_balanced_parenthetical_not_counted(self) -> None:
+        assert paren_smiley_rate(["(нарешті)"]) == 0.0
+        assert paren_smiley_rate(["так (бо треба)"]) == 0.0
+        assert paren_smiley_rate(["привіт (буду о 5)"]) == 0.0
+
+    def test_unbalanced_close_still_counts(self) -> None:
+        # a trailing smiley after a parenthetical: more ) than (
+        assert paren_smiley_rate(["(в дужках) ок)"]) == 1.0
+
+    def test_mixed_parenthetical_and_smiley(self) -> None:
+        assert paren_smiley_rate(["(ok)", "норм)"]) == 0.5
+
 
 class TestPerBubbleLengths:
     def test_flattens_across_texts(self) -> None:
