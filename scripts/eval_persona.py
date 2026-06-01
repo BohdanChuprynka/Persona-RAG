@@ -19,14 +19,19 @@ and prints a human scorecard.
 
 from __future__ import annotations
 
-# Shadow mode BEFORE importing settings-readers: the graph skips the Telegram
-# round-trip and we read state["reply"] directly (no bot needed).
+# Set env BEFORE importing settings-readers (get_settings is cached on first read):
+# - SHADOW_MODE: the graph skips the Telegram round-trip; we read state["reply"].
+# - MEMORY_UPDATE_INTERVAL_TURNS=0: seeding prior context as session can cross the
+#   memory-update throttle and fire real (paid) update_contact_memory LLM calls
+#   per qualifying turn (code-review #5). 0 disables it for eval.
 import os
 
 os.environ.setdefault("SHADOW_MODE", "true")
+os.environ.setdefault("MEMORY_UPDATE_INTERVAL_TURNS", "0")
 
 import argparse
 import asyncio
+import csv
 import json
 import random
 from datetime import UTC, datetime
@@ -104,6 +109,16 @@ def _style_self_sim(real: list[str], gen: list[str]) -> float | None:
         return None
 
 
+def write_pairs_csv(path: Path, rows: list[tuple[str, str, str]]) -> None:
+    """Write (incoming, real, generated) triples via the csv module so embedded
+    quotes / commas / newlines round-trip correctly (code-review #4). The old
+    json.dumps-per-cell escaped a `"` as `\\"` which csv.reader mis-parses."""
+    with path.open("w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        w.writerow(["incoming", "real", "generated"])
+        w.writerows(rows)
+
+
 async def run(name: str, n: int, seed: int) -> None:
     s = get_settings()
     turns = _sample_held_out(n, seed)
@@ -138,12 +153,7 @@ async def run(name: str, n: int, seed: int) -> None:
 
     out_dir = Path("data/eval") / name
     out_dir.mkdir(parents=True, exist_ok=True)
-    # json-encode each cell so embedded newlines/commas survive the CSV
-    with (out_dir / "pairs.csv").open("w") as f:
-        f.write("incoming,real,generated\n")
-        for inc, r, g in zip(incomings, real, gen, strict=True):
-            cells = [json.dumps(x, ensure_ascii=False) for x in (inc, r, g)]
-            f.write(",".join(cells) + "\n")
+    write_pairs_csv(out_dir / "pairs.csv", list(zip(incomings, real, gen, strict=True)))
 
     scorecard = {
         "name": name,
