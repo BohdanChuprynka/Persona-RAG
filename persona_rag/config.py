@@ -98,10 +98,14 @@ class Settings(BaseSettings):
     # bot is unchanged until measured.
     #   PAREN_LOGIT_BIAS: positive OpenAI logit bias (1..5 sane) on the ")" /
     #     "))" tokens to nudge Bohdan's paren-smiley tic. 0 = off.
+    #   EXCLAIM_LOGIT_BIAS: NEGATIVE bias on the "!" tokens to kill the model's
+    #     exclamation habit. Bohdan never uses "!" (0% in real replies) but the
+    #     base model adds them when firing back. -5 strongly suppresses. 0 = off.
     #   BEST_OF_N: sample N candidates and keep the one closest to Bohdan's
     #     style centroid (needs the authorship scorer). 1 = off. Multiplies
     #     generation token cost by N — keep small.
     PAREN_LOGIT_BIAS: int = 0
+    EXCLAIM_LOGIT_BIAS: int = 0
     BEST_OF_N: int = 1
     BEST_OF_N_TEMPERATURE: float = 1.0
     # Real chat behavior: split replies on \n and send each fragment as

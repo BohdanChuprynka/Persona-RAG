@@ -64,6 +64,43 @@ def paren_logit_bias() -> dict[int, int] | None:
     return {i: int(s.PAREN_LOGIT_BIAS) for i in ids}
 
 
+@lru_cache(maxsize=8)
+def _exclaim_token_ids(model: str) -> tuple[int, ...]:
+    """Single-token ids for "!" runs under ``model``'s encoding."""
+    try:
+        enc = tiktoken.encoding_for_model(model)
+    except KeyError:
+        enc = tiktoken.get_encoding("o200k_base")
+    ids: set[int] = set()
+    for tok in ("!", "!!", "!!!", " !"):
+        e = enc.encode(tok)
+        if len(e) == 1:
+            ids.add(e[0])
+    return tuple(sorted(ids))
+
+
+def exclaim_logit_bias() -> dict[int, int] | None:
+    """Map the "!" token ids to EXCLAIM_LOGIT_BIAS (negative), or None when
+    disabled. Suppresses the model's exclamation habit — Bohdan never uses "!"."""
+    s = get_settings()
+    if not s.EXCLAIM_LOGIT_BIAS:
+        return None
+    ids = _exclaim_token_ids(s.OPENAI_CHAT_MODEL)
+    if not ids:
+        return None
+    return {i: int(s.EXCLAIM_LOGIT_BIAS) for i in ids}
+
+
+def voice_logit_bias() -> dict[int, int] | None:
+    """Merged decoding nudges applied at generation: paren tic up, exclamation
+    habit down. None when both are off. Paren/exclaim token ids are disjoint."""
+    merged: dict[int, int] = {}
+    for part in (paren_logit_bias(), exclaim_logit_bias()):
+        if part:
+            merged.update(part)
+    return merged or None
+
+
 def _base_kwargs(
     messages: list[dict[str, str]],
     *,

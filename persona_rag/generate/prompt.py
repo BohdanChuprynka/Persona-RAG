@@ -52,7 +52,9 @@ def _heated_directive() -> str:
     the register-match rule already in the template."""
     return (
         "For THIS reply: they came at you — match the heat. Fire back short and "
-        "sharp in your real comeback style; do NOT be nice, do NOT de-escalate."
+        "sharp in your real comeback style; do NOT be nice, do NOT de-escalate. "
+        "Lowercase, no exclamation marks, no terminal punctuation — you never use "
+        "'!'. It's 'сам ти даун', not 'сам ти даун!'."
     )
 
 
