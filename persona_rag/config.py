@@ -78,6 +78,15 @@ class Settings(BaseSettings):
     MAX_REPLY_TOKENS: int = 500
     TEMPERATURE: float = 0.8
     ENABLE_PROMPT_CACHING: bool = True
+    # Shape-conditioning: read the typical message-count of the moment off the
+    # retrieved example replies and INSTRUCT the model to match it. The model
+    # ignores soft "be short" rules but obeys an enforced per-reply directive.
+    SHAPE_HINT_ENABLED: bool = True
+    # Register-aware generation: classify the incoming as heated / serious /
+    # casual and adapt. serious (someone opening up / asking for real help)
+    # drops the brevity cap and injects an engagement directive so the bot
+    # stops brushing off vulnerable messages with a flippant one-liner.
+    REGISTER_AWARE_ENABLED: bool = True
     # Real chat behavior: split replies on \n and send each fragment as
     # its own Telegram message, with a small human-like typing delay
     # between them. Disable to keep everything in one bubble.
