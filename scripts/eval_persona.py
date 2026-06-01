@@ -39,6 +39,7 @@ from persona_rag.config import get_settings
 from persona_rag.db.engine import make_engine
 from persona_rag.db.models import PersonaTurnRow
 from persona_rag.eval.distribution import persona_distance
+from persona_rag.generate.llm_client import active_model
 from persona_rag.graph.compile import build_graph
 from persona_rag.graph.nodes.load_session import SessionEntry, get_sessions
 from persona_rag.models import ChatMessage
@@ -156,7 +157,8 @@ async def run(name: str, n: int, seed: int) -> None:
             "shape_hint": getattr(s, "SHAPE_HINT_ENABLED", None),
             "best_of_n": getattr(s, "BEST_OF_N", None),
             "paren_logit_bias": getattr(s, "PAREN_LOGIT_BIAS", None),
-            "model": s.OPENAI_CHAT_MODEL,
+            "backend": getattr(s, "GENERATION_BACKEND", None),
+            "model": active_model(),
             "temperature": s.TEMPERATURE,
             "score_floor": s.HYBRID_SCORE_FLOOR,
         },
@@ -200,12 +202,10 @@ def _print_scorecard(sc: dict) -> None:
         f"mean={gs['bubble_len_mean']:.0f}"
     )
     print(
-        f"  caps ratio:         real={rs['caps_ratio_mean']:.3f}   "
-        f"gen={gs['caps_ratio_mean']:.3f}"
+        f"  caps ratio:         real={rs['caps_ratio_mean']:.3f}   gen={gs['caps_ratio_mean']:.3f}"
     )
     print(
-        f"  emoji rate:         real={rs['emoji_rate_mean']:.4f}   "
-        f"gen={gs['emoji_rate_mean']:.4f}"
+        f"  emoji rate:         real={rs['emoji_rate_mean']:.4f}   gen={gs['emoji_rate_mean']:.4f}"
     )
     print(
         f"  paren-smiley ):     real={rs.get('paren_smiley_rate', 0):.3f}   "

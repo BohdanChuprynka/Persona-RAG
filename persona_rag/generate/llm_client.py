@@ -93,7 +93,15 @@ def exclaim_logit_bias() -> dict[int, int] | None:
 
 def voice_logit_bias() -> dict[int, int] | None:
     """Merged decoding nudges applied at generation: paren tic up, exclamation
-    habit down. None when both are off. Paren/exclaim token ids are disjoint."""
+    habit down. None when both are off. Paren/exclaim token ids are disjoint.
+
+    OpenAI-only: the ids come from tiktoken, so on the ollama/Qwen backend they
+    map to unrelated tokens — and Ollama's OpenAI-compatible API ignores
+    logit_bias regardless. On the LoRA the ")" tic and the absence of "!" are
+    learned straight from the training data, so no decode-time nudge is needed.
+    """
+    if get_settings().GENERATION_BACKEND != "openai":
+        return None
     merged: dict[int, int] = {}
     for part in (paren_logit_bias(), exclaim_logit_bias()):
         if part:

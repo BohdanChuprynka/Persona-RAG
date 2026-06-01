@@ -6,6 +6,7 @@ from typing import Any
 
 from persona_rag.config import get_settings
 from persona_rag.generate.bubbles import target_bubbles
+from persona_rag.generate.persona import THIN_SYSTEM
 from persona_rag.generate.register import detect_register
 from persona_rag.insights.persona_description import generate_persona_description
 from persona_rag.models import ChatMessage, RetrievedTurn, StyleAnchors
@@ -79,9 +80,12 @@ write the NEXT reply in the same voice — same casing, same punctuation, same
 length, same fragmentation. This is the most important rule.
 
 Concretely:
-- COPY the casing pattern of the examples. If they're lowercase, you reply
-  lowercase. Do NOT capitalize first letters of sentences just because
-  grammar says so.
+- COPY the casing pattern of the examples. Many of your messages start with a
+  capital first letter (your phone autocapitalizes the first word) — so if the
+  examples start capitalized, you do too ("Да", "Ок", "Поняв"); if they're
+  lowercase, you stay lowercase. What you NEVER do is grammatical Title Case or
+  capitalize words mid-message because grammar says so. Match the examples,
+  don't "correct" them.
 - COPY the punctuation pattern. If examples skip periods at the end of
   short messages, you skip them too.
 - MOST OF YOUR REPLIES ARE ONE SHORT MESSAGE. About half the time you answer
@@ -178,6 +182,53 @@ Other rules:
 """
 
 
+def build_thin_messages(
+    *,
+    incoming: str,
+    session: list[ChatMessage],
+    system: str = THIN_SYSTEM,
+    facts: str | None = None,
+    max_ctx_chars: int = 2000,
+) -> list[dict[str, str]]:
+    """Serving prompt for the fine-tuned LoRA (``GENERATION_BACKEND == "ollama"``).
+
+    Reproduces the EXACT shape the adapter trained on: one short persona system
+    turn + a SINGLE user turn holding the joined recent context (the same
+    ``"\\n".join(incoming_context)`` the export builds), then the model completes
+    the reply. No 1600-token English template, no retrieved few-shot assistant
+    turns (those break the ``train_on_responses_only`` single-assistant-turn
+    mask), no register/shape directives — the LoRA learned bursts, casing, the
+    ")" tic and code-switch FROM the data, not from prose rules it never saw.
+
+    ``facts`` (optional) is a short RAG/insight addendum folded into the system
+    turn. The system turn is never in the training loss, so a brief addendum is a
+    mild conditioning shift — unlike the heavy template, which was catastrophic.
+    """
+    sys_content = f"{system}\n\n{facts}" if facts and facts.strip() else system
+    ctx_lines = [m.content for m in session] + [incoming]
+    joined = "\n".join(c for c in ctx_lines if c and c.strip())[-max_ctx_chars:]
+    return [
+        {"role": "system", "content": sys_content},
+        {"role": "user", "content": joined},
+    ]
+
+
+def _compact_facts(
+    user_memory: str, insights: dict[str, Any] | None, *, cap: int = 400
+) -> str | None:
+    """A SHORT facts addendum for the thin LoRA path (opt-in via
+    ``OLLAMA_FACTS_IN_SYSTEM``). Contact memory + bio insights only, capped —
+    never the full insights block (which would re-introduce the skew)."""
+    parts: list[str] = []
+    if user_memory and user_memory.strip():
+        parts.append(user_memory.strip())
+    for r in (insights or {}).get("semantic", []):
+        if getattr(r, "category", None) == "bio":
+            parts.append(f"- {r.text}")
+    joined = "\n".join(parts).strip()
+    return joined[:cap] or None
+
+
 def build_messages(
     *,
     persona_name: str,
@@ -190,6 +241,13 @@ def build_messages(
     insights: dict[str, Any] | None = None,
 ) -> list[dict[str, str]]:
     s = get_settings()
+    # LoRA path: serve the EXACT thin shape the adapter trained on. Routing the
+    # fine-tuned model through the heavy gpt-4o-mini template below is the
+    # audit's dominant finding — it drags the small model back to its generic
+    # instruct register and undoes the fine-tune.
+    if s.GENERATION_BACKEND == "ollama":
+        facts = _compact_facts(user_memory, insights) if s.OLLAMA_FACTS_IN_SYSTEM else None
+        return build_thin_messages(incoming=incoming, session=session, facts=facts)
     # Generated persona description fallback
     if s.INSIGHTS_USE_GENERATED_PERSONA_DESCRIPTION:
         persona_description = generate_persona_description(fallback=persona_description)

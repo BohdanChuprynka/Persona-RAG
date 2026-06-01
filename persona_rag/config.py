@@ -35,6 +35,11 @@ class Settings(BaseSettings):
     GENERATION_BACKEND: str = "openai"
     OLLAMA_BASE_URL: str = "http://localhost:11434/v1"
     OLLAMA_MODEL: str = "bohdan"
+    # When serving the LoRA (ollama), the prompt is the THIN shape the adapter
+    # trained on (persona anchor + joined context only) so train == serve. Set
+    # this true to fold a SHORT facts addendum (contact memory + bio insights)
+    # into the system turn — trades a little train/serve fidelity for RAG facts.
+    OLLAMA_FACTS_IN_SYSTEM: bool = False
 
     # Qdrant
     QDRANT_URL: str = "http://localhost:6333"

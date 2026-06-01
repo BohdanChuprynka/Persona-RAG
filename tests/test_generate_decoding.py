@@ -88,3 +88,30 @@ class TestVoiceLogitBias:
             assert voice_logit_bias() is None
         finally:
             get_settings.cache_clear()
+
+
+class TestVoiceLogitBiasBackendGate:
+    """The token ids come from the OpenAI tokenizer (tiktoken). On the ollama
+    backend the model is Qwen — those ids map to unrelated tokens, and Ollama's
+    OpenAI-compatible API drops logit_bias anyway. So the lever must be OpenAI
+    -only; on the LoRA the ")" tic and absent "!" are learned from the data."""
+
+    def test_ollama_backend_disables_logit_bias(self, monkeypatch) -> None:
+        monkeypatch.setenv("PAREN_LOGIT_BIAS", "2")
+        monkeypatch.setenv("EXCLAIM_LOGIT_BIAS", "-5")
+        monkeypatch.setenv("GENERATION_BACKEND", "ollama")
+        get_settings.cache_clear()
+        try:
+            assert voice_logit_bias() is None
+        finally:
+            get_settings.cache_clear()
+
+    def test_openai_backend_keeps_logit_bias(self, monkeypatch) -> None:
+        monkeypatch.setenv("PAREN_LOGIT_BIAS", "2")
+        monkeypatch.setenv("EXCLAIM_LOGIT_BIAS", "-5")
+        monkeypatch.setenv("GENERATION_BACKEND", "openai")
+        get_settings.cache_clear()
+        try:
+            assert voice_logit_bias()  # non-empty on the OpenAI path
+        finally:
+            get_settings.cache_clear()

@@ -57,6 +57,30 @@ def main() -> None:
     print(f"eval.jsonl:  {n_eval} pairs")
     print(f"system turn: {'(none)' if system is None else system!r}")
     print(f"-> {out_dir}/")
+    _print_reference(train, held)
+
+
+def _print_reference(train: list, held: list) -> None:
+    """Print the register-matched reference: the recipient-stratified split means
+    train and eval share the same code-switch register, so these are the LoRA's
+    HONEST, reachable targets (not the old temporal-split 0.468 artifact)."""
+    from persona_rag.eval.distribution import (
+        latin_script_rate,
+        opener_top_share,
+        paren_smiley_rate,
+    )
+
+    def replies(recs: list) -> list[str]:
+        return [t["value"] for r in recs for t in r["conversations"] if t["from"] == "gpt"]
+
+    tr, ev = replies(train), replies(held)
+    print("\nregister-matched reference (the LoRA's honest target — train≈eval by design):")
+    for name, fn in (
+        ("latin_script_rate", latin_script_rate),
+        ("paren_smiley_rate", paren_smiley_rate),
+        ("opener_top_share", opener_top_share),
+    ):
+        print(f"  {name:18s} train={fn(tr):.3f}  eval={fn(ev):.3f}")
 
 
 if __name__ == "__main__":
