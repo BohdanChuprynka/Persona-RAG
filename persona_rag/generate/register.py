@@ -1,6 +1,6 @@
-# ruff: noqa: RUF001, RUF003
-# Reason: Ukrainian/Russian marker tokens + examples contain Cyrillic that ruff
-# flags as look-alike (in strings and comments). They are intentional.
+# ruff: noqa: RUF001
+# Reason: Ukrainian/Russian marker tokens contain Cyrillic that ruff flags as
+# look-alike. They are intentional.
 """Incoming-message register detection.
 
 The persona had a single register — terse banter — and no notion of emotional
