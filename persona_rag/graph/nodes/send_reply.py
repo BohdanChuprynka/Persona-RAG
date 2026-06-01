@@ -6,6 +6,7 @@ import random
 from typing import Any
 
 from persona_rag.config import get_settings
+from persona_rag.generate.bubbles import split_bubbles
 from persona_rag.graph.state import GraphState
 
 _BOT: Any = None  # Bot instance injected at compile time
@@ -17,18 +18,13 @@ def attach_bot(bot: Any) -> None:
 
 
 def _split_reply(reply: str) -> list[str]:
-    """Split a reply on newlines so each fragment becomes a separate Telegram
-    message — mirrors how Bohdan actually chats. Empty fragments dropped.
-
-    Robust to models that emit the literal two-char sequence ``\\n`` (the
-    prompt previously asked for "\\n" so older traces show this), as well
-    as ``\\r\\n`` line endings.
-    """
+    """Split a reply into Telegram bubbles via the canonical ``split_bubbles``
+    (the same primitive used by measurement and the shape-hint), so delivery,
+    eval, and generation all agree on what a "bubble" is. Honours the
+    REPLY_SPLIT_NEWLINES kill-switch (everything in one bubble when off)."""
     if not get_settings().REPLY_SPLIT_NEWLINES:
         return [reply] if reply else []
-    normalized = reply.replace("\\n", "\n").replace("\r\n", "\n")
-    chunks = [c.strip() for c in normalized.split("\n")]
-    return [c for c in chunks if c]
+    return split_bubbles(reply)
 
 
 def _typing_delay_ms(chunk: str) -> int:

@@ -6,6 +6,7 @@ from typing import Any
 
 from persona_rag.config import get_settings
 from persona_rag.generate.bubbles import target_bubbles
+from persona_rag.generate.register import detect_register
 from persona_rag.insights.persona_description import generate_persona_description
 from persona_rag.models import ChatMessage, RetrievedTurn, StyleAnchors
 
@@ -24,6 +25,34 @@ def _shape_directive(n: int) -> str:
     return (
         f"For THIS reply: send about {n} short messages — put each on its own "
         f"line ({n - 1} line break(s)). Keep each line short."
+    )
+
+
+def _engagement_directive() -> str:
+    """Per-reply instruction for a 'serious' incoming — someone opening up or
+    asking for real help. Overrides the brevity reflex + the deflection rule so
+    the bot stops brushing off vulnerable messages with a flippant one-liner.
+    This is the fix for the 'emotionless' tone failure."""
+    return (
+        "For THIS reply: they're being real with you — opening up, venting, or "
+        "asking for actual help. This is NOT a moment for a one-word brush-off, a "
+        "joke, or a deflection like 'хз' / 'та таке' / 'забудь'. Drop the banter "
+        "reflex. Actually read what they said and answer IT: name the thing back "
+        "to them, say what you genuinely think or feel about it, ask the real "
+        "follow-up you'd ask a close friend. Take the space you need — a few short "
+        "lines, more than your usual one-liner. Stay fully in your voice "
+        "(lowercase, your slang, uk/ru/en the way you actually text, NO therapy-"
+        "speak, NO 'я розумію твої почуття') — just be present and mean it, "
+        "don't perform it."
+    )
+
+
+def _heated_directive() -> str:
+    """Per-reply nudge for a 'heated' incoming — they came at you. Reinforces
+    the register-match rule already in the template."""
+    return (
+        "For THIS reply: they came at you — match the heat. Fire back short and "
+        "sharp in your real comeback style; do NOT be nice, do NOT de-escalate."
     )
 
 
@@ -115,8 +144,8 @@ Other rules:
   facts):" section that directly answers the question, USE it. State the
   fact in your voice. The deflection rule below is for when no such
   anchor exists. Example: friend asks "куди в школу ходиш?" and bio facts
-  has "Bohdan attends North Royalton High School" — reply with the school
-  name in your voice ("North Royalton", "тут в Огайо"), NOT "не скажу".
+  has "{persona_name} attends Lincoln High" — reply with the school
+  name in your voice ("Lincoln", "тут в нашому штаті"), NOT "не скажу".
 - For yes/no factual questions ("ти зара працюєш?", "ти в офісі?", "є
   машина?"), prefer `bio` category facts over `opinion` category feelings.
   If bio says you're employed, answer yes (you can then add the opinion as
@@ -185,12 +214,24 @@ def build_messages(
         msgs.append({"role": "assistant", "content": r.turn.your_reply})
     for m in session:
         msgs.append({"role": m.role, "content": m.content})
-    # Shape hint: instruct the model to match the message-count of the moment,
-    # read off the retrieved examples. The model won't single-message on its own.
-    if s.SHAPE_HINT_ENABLED:
+
+    # Register-aware per-reply directive. The model obeys an enforced per-reply
+    # instruction far more reliably than the soft rules in the template.
+    #   serious -> ENGAGE: drop the brevity cap, override the deflection reflex.
+    #   heated  -> shape (short) + fire-back nudge.
+    #   casual  -> shape only (the common case).
+    register = detect_register(incoming) if s.REGISTER_AWARE_ENABLED else "casual"
+    if register == "serious":
+        msgs.append({"role": "system", "content": _engagement_directive()})
+    elif s.SHAPE_HINT_ENABLED:
+        # Shape hint: match the message-count of the moment, read off the
+        # retrieved examples. The model won't single-message on its own.
         n = target_bubbles([r.turn.your_reply for r in retrieved])
         if n:
             msgs.append({"role": "system", "content": _shape_directive(n)})
+        if register == "heated":
+            msgs.append({"role": "system", "content": _heated_directive()})
+
     msgs.append({"role": "user", "content": incoming})
     return msgs
 
