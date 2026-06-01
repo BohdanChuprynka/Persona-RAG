@@ -50,6 +50,9 @@ packages = ["persona_rag"]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+# Colab notebooks are runnable cell scripts (%%capture, !pip, deliberate unused
+# imports), not library code — don't lint them.
+extend-exclude = ["notebooks"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]

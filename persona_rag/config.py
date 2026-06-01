@@ -29,6 +29,13 @@ class Settings(BaseSettings):
     OPENAI_CHAT_MODEL: str = "gpt-4o-mini"
     OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"
 
+    # Generation backend. "openai" (default) or "ollama" — point the generate
+    # node at a locally-served fine-tuned LoRA (Ollama's OpenAI-compatible API)
+    # after the Colab run. Embeddings/insights still use OpenAI.
+    GENERATION_BACKEND: str = "openai"
+    OLLAMA_BASE_URL: str = "http://localhost:11434/v1"
+    OLLAMA_MODEL: str = "bohdan"
+
     # Qdrant
     QDRANT_URL: str = "http://localhost:6333"
     QDRANT_API_KEY: str | None = None

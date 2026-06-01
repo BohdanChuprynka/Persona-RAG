@@ -10,9 +10,30 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 from persona_rag.config import get_settings
 
 
-@lru_cache(maxsize=1)
+@lru_cache(maxsize=2)
+def _openai_client(api_key: str) -> AsyncOpenAI:
+    return AsyncOpenAI(api_key=api_key)
+
+
+@lru_cache(maxsize=2)
+def _ollama_client(base_url: str) -> AsyncOpenAI:
+    # Ollama exposes an OpenAI-compatible API; the key is ignored but required.
+    return AsyncOpenAI(base_url=base_url, api_key="ollama")
+
+
 def _client() -> AsyncOpenAI:
-    return AsyncOpenAI(api_key=get_settings().OPENAI_API_KEY)
+    """Active chat client. Ollama (local fine-tuned LoRA) when GENERATION_BACKEND
+    is 'ollama', else OpenAI."""
+    s = get_settings()
+    if s.GENERATION_BACKEND == "ollama":
+        return _ollama_client(s.OLLAMA_BASE_URL)
+    return _openai_client(s.OPENAI_API_KEY)
+
+
+def active_model() -> str:
+    """Model name for the active backend."""
+    s = get_settings()
+    return s.OLLAMA_MODEL if s.GENERATION_BACKEND == "ollama" else s.OPENAI_CHAT_MODEL
 
 
 @lru_cache(maxsize=8)
@@ -53,7 +74,7 @@ def _base_kwargs(
 ) -> dict[str, Any]:
     s = get_settings()
     kwargs: dict[str, Any] = {
-        "model": model or s.OPENAI_CHAT_MODEL,
+        "model": model or active_model(),
         "messages": messages,
         "max_tokens": max_tokens if max_tokens is not None else s.MAX_REPLY_TOKENS,
         "temperature": temperature if temperature is not None else s.TEMPERATURE,
