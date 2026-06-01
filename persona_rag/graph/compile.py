@@ -22,10 +22,16 @@ from persona_rag.models import UserState
 
 
 def _route_after_auth(state: GraphState) -> str:
-    auth = state.get("auth_state")
-    if auth == UserState.WHITELISTED.value:
-        return "retrieve_hybrid"
-    return END
+    if state.get("auth_state") != UserState.WHITELISTED.value:
+        return END
+    # The LoRA (ollama) serves the THIN prompt and never injects retrieved
+    # few-shot turns, so retrieve_hybrid is dead weight on that path — and its
+    # per-message OpenAI embedding is the only runtime phone-home. Skip it and
+    # enter at the facts layer (load_memory -> retrieve_insights), which still
+    # feeds OLLAMA_FACTS_IN_SYSTEM. The OpenAI path keeps few-shot retrieval.
+    if get_settings().GENERATION_BACKEND == "ollama":
+        return "load_memory"
+    return "retrieve_hybrid"
 
 
 def _route_after_guardrails(state: GraphState) -> str:
