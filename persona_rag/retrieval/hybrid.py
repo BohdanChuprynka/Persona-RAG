@@ -32,6 +32,11 @@ def fuse_scores(
 
     all_ids = set(dense_map) | set(bm25_map)
     turn_by_id = {x.turn.id: x.turn for x in (*dense, *bm25)}
+    # Dense hits carry embeddings; BM25-only hits do not. Prefer the dense
+    # entry's embedding when both exist.
+    embedding_by_id: dict[str, list[float] | None] = {x.turn.id: x.embedding for x in dense}
+    for x in bm25:
+        embedding_by_id.setdefault(x.turn.id, x.embedding)
 
     fused: list[RetrievedTurn] = []
     for _id in all_ids:
@@ -44,6 +49,7 @@ def fuse_scores(
                 score=s_score,
                 score_dense=dense_map.get(_id, 0.0),
                 score_bm25=bm25_map.get(_id, 0.0),
+                embedding=embedding_by_id.get(_id),
             )
         )
     fused.sort(key=lambda x: x.score, reverse=True)

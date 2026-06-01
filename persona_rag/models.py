@@ -55,6 +55,10 @@ class RetrievedTurn(BaseModel):
     score: float
     score_dense: float = 0.0
     score_bm25: float = 0.0
+    # Dense embedding for MMR diversity computation. None when not fetched
+    # (e.g. BM25-only hits, or MMR disabled). MMR treats missing embeddings
+    # as max-distance from any other (i.e. no diversity penalty).
+    embedding: list[float] | None = None
 
 
 class ChatMessage(BaseModel):

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from datetime import datetime
 
 from sqlmodel import Field, SQLModel
@@ -50,10 +51,12 @@ class User(SQLModel, table=True):
     notes: str | None = None
 
 
-class UserMemory(SQLModel, table=True):
+class ContactMemory(SQLModel, table=True):
+    __tablename__ = "contact_memory"
+
     user_id: int = Field(primary_key=True)
     summary: str
-    last_interaction: datetime
+    last_interaction: datetime | None = None
     updated_at: datetime
 
 
@@ -71,3 +74,82 @@ class AuditLog(SQLModel, table=True):
     action: str
     target_id: int | None = None
     details: str | None = None
+
+
+class AlgoSignal(SQLModel, table=True):
+    __tablename__ = "algo_signal"
+
+    id: int | None = Field(default=None, primary_key=True)
+    kind: str = Field(index=True)  # entity|rhythm|language|phase|style
+    subject: str = Field(index=True)
+    value_json: str
+    first_seen: datetime
+    last_seen: datetime
+    evidence_count: int
+    updated_at: datetime
+
+
+class InsightRow(SQLModel, table=True):
+    __tablename__ = "insight_row"
+
+    id: str = Field(primary_key=True)
+    category: str = Field(index=True)  # bio|opinion|interest|behavior
+    subject: str = Field(index=True)
+    text: str
+    confidence: float
+    evidence_count: int = 1
+    earliest_date: datetime
+    latest_date: datetime
+    trajectory: str | None = None
+    source_session_ids: str  # JSON list[str], empty list for onboarding
+    distinct_partners: int = Field(default=0)
+    source: str = Field(index=True)  # chat|user_verified|onboarding
+    review_status: str = Field(index=True)  # auto|pending|approved|rejected
+    edited_text: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class InsightRunState(SQLModel, table=True):
+    __tablename__ = "insight_run_state"
+
+    session_id: str = Field(primary_key=True)
+    last_extracted_at: datetime
+    insights_count: int
+    failed: bool = False
+    error_message: str | None = None
+
+
+class RawInsightRow(SQLModel, table=True):
+    """Stage C checkpoint table — one row per LLM-extracted raw insight.
+
+    Persisted atomically alongside InsightRunState in each Stage C iteration so
+    that a crash anywhere downstream (Stage D, E, F) leaves the extracted raws
+    recoverable on the next incremental run. See
+    docs/superpowers/specs/2026-05-26-stage-c-checkpointing-design.md.
+    """
+
+    __tablename__ = "raw_insight"
+
+    id: str = Field(default_factory=lambda: uuid.uuid4().hex, primary_key=True)
+    session_id: str = Field(index=True)
+    category: str  # bio | opinion | interest | behavior
+    subject: str  # raw, NOT normalized
+    text: str
+    confidence: float
+    source_quote: str
+    extracted_at: datetime
+    source_quote_validated: bool = Field(default=False)
+    verification_verdict: str | None = Field(default=None)  # YES|NO|AMBIGUOUS
+    verification_reason: str | None = Field(default=None)
+
+
+class VerificationSession(SQLModel, table=True):
+    __tablename__ = "verification_session"
+
+    user_id: int = Field(primary_key=True)
+    phase: str  # idle|phase1_in_progress|phase1_done|phase2_in_progress|phase2_done
+    current_insight_id: str | None = None
+    current_question_id: str | None = None
+    started_at: datetime
+    updated_at: datetime

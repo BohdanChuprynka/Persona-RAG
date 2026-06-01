@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import random
 from typing import Any
 
 from persona_rag.config import get_settings
+from persona_rag.generate.bubbles import split_bubbles
 from persona_rag.graph.state import GraphState
 
 _BOT: Any = None  # Bot instance injected at compile time
@@ -16,19 +18,25 @@ def attach_bot(bot: Any) -> None:
 
 
 def _split_reply(reply: str) -> list[str]:
-    """Split a reply on newlines so each fragment becomes a separate Telegram
-    message — mirrors how Bohdan actually chats. Empty fragments dropped.
-    """
+    """Split a reply into Telegram bubbles via the canonical ``split_bubbles``
+    (the same primitive used by measurement and the shape-hint), so delivery,
+    eval, and generation all agree on what a "bubble" is. Honours the
+    REPLY_SPLIT_NEWLINES kill-switch (everything in one bubble when off)."""
     if not get_settings().REPLY_SPLIT_NEWLINES:
         return [reply] if reply else []
-    chunks = [c.strip() for c in reply.split("\n")]
-    return [c for c in chunks if c]
+    return split_bubbles(reply)
 
 
 def _typing_delay_ms(chunk: str) -> int:
+    """Per-chunk delay with random jitter so consecutive messages don't pulse
+    at machine-precise intervals."""
     s = get_settings()
     raw = s.REPLY_CHUNK_DELAY_BASE_MS + len(chunk) * s.REPLY_CHUNK_DELAY_PER_CHAR_MS
-    return min(raw, s.REPLY_CHUNK_DELAY_MAX_MS)
+    capped = min(raw, s.REPLY_CHUNK_DELAY_MAX_MS)
+    jitter = max(0.0, min(s.REPLY_CHUNK_DELAY_JITTER_PCT, 0.95))
+    if jitter > 0:
+        capped = int(capped * random.uniform(1 - jitter, 1 + jitter))
+    return max(0, capped)
 
 
 async def send_reply(state: GraphState) -> GraphState:

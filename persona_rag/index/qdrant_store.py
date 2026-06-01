@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from collections.abc import Iterable
 
 from qdrant_client import QdrantClient
@@ -22,6 +23,17 @@ from persona_rag.config import get_settings
 from persona_rag.models import PersonaTurn, RetrievedTurn
 
 VECTOR_SIZE = 1536  # text-embedding-3-small
+
+# Qdrant accepts only unsigned int or UUID string as point IDs. Our insight rows
+# use a 16-char sha1 hex as the stable SQLite primary key (deterministic across
+# runs). This helper bridges the two: deterministic mapping sqlite_id → UUID5.
+_QDRANT_ID_NS = uuid.UUID("6b8f1f4c-1c4a-4f3a-9b9e-1d3c2f5a7e09")
+
+
+def to_qdrant_point_id(sqlite_id: str) -> str:
+    """Map an InsightRow.id (16-hex) to a deterministic Qdrant UUID string."""
+    return str(uuid.uuid5(_QDRANT_ID_NS, sqlite_id))
+
 
 _Condition = (
     FieldCondition
@@ -73,6 +85,24 @@ def upsert_turns(
         client.upsert(collection_name=collection, points=points)
 
 
+def ensure_insights_collection(
+    client: QdrantClient, name: str, *, vector_size: int = VECTOR_SIZE
+) -> None:
+    """Create the self_insights collection (idempotent). Mirrors ensure_collection."""
+    collections = {c.name for c in client.get_collections().collections}
+    if name in collections:
+        return
+    client.create_collection(
+        collection_name=name,
+        vectors_config=VectorParams(size=vector_size, distance=Distance.COSINE),
+    )
+    client.create_payload_index(name, field_name="category", field_schema=PayloadSchemaType.KEYWORD)
+    client.create_payload_index(name, field_name="source", field_schema=PayloadSchemaType.KEYWORD)
+    client.create_payload_index(
+        name, field_name="review_status", field_schema=PayloadSchemaType.KEYWORD
+    )
+
+
 def search_dense(
     client: QdrantClient,
     collection: str,
@@ -94,9 +124,25 @@ def search_dense(
         limit=top_k,
         query_filter=flt,
         with_payload=True,
+        with_vectors=True,
     )
     out: list[RetrievedTurn] = []
     for h in response.points:
         turn = PersonaTurn.model_validate(h.payload)
-        out.append(RetrievedTurn(turn=turn, score=float(h.score), score_dense=float(h.score)))
+        vec = getattr(h, "vector", None)
+        # Accept only flat list[float | int]. Reject dict (named vectors) and
+        # list[list[float]] (multi-vector collections). Our collection is
+        # single unnamed vector — see ensure_collection — so flat list is the
+        # only valid shape; defensive guard catches accidental config drift.
+        embedding = (
+            vec if isinstance(vec, list) and (not vec or isinstance(vec[0], int | float)) else None
+        )
+        out.append(
+            RetrievedTurn(
+                turn=turn,
+                score=float(h.score),
+                score_dense=float(h.score),
+                embedding=embedding,
+            )
+        )
     return out

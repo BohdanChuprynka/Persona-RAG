@@ -20,7 +20,7 @@ def _extract_text(msg: dict[str, object]) -> str:
 
 
 def _normalize_id(value: object) -> str:
-    """Telegram exports user IDs as ``"user1037155651"`` (string with prefix) or
+    """Telegram exports user IDs as ``"user123456789"`` (string with prefix) or
     plain int depending on version. Strip the ``user`` / ``channel`` prefix and
     return the numeric body so downstream matching against ``ADMIN_TELEGRAM_ID``
     works regardless of the source format.

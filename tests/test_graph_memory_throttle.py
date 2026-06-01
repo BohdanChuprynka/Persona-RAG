@@ -31,7 +31,7 @@ async def test_skips_when_below_interval(monkeypatch):
         "session": _session_of_turns(2),  # below 4
     }
     with patch(
-        "persona_rag.graph.nodes.update_memory.update_user_memory", AsyncMock()
+        "persona_rag.graph.nodes.update_memory.update_contact_memory", AsyncMock()
     ) as mock_update:
         await update_memory_node(state)
     mock_update.assert_not_called()
@@ -51,7 +51,7 @@ async def test_fires_at_interval_boundary(monkeypatch):
         "session": _session_of_turns(4),  # boundary
     }
     with patch(
-        "persona_rag.graph.nodes.update_memory.update_user_memory", AsyncMock()
+        "persona_rag.graph.nodes.update_memory.update_contact_memory", AsyncMock()
     ) as mock_update:
         await update_memory_node(state)
     mock_update.assert_called_once()
@@ -71,7 +71,7 @@ async def test_disabled_when_interval_zero(monkeypatch):
         "session": _session_of_turns(20),
     }
     with patch(
-        "persona_rag.graph.nodes.update_memory.update_user_memory", AsyncMock()
+        "persona_rag.graph.nodes.update_memory.update_contact_memory", AsyncMock()
     ) as mock_update:
         await update_memory_node(state)
     mock_update.assert_not_called()
@@ -86,7 +86,7 @@ async def test_skips_when_session_empty(monkeypatch):
 
     state: GraphState = {"user_id": 1, "chat_id": 1, "incoming": "x", "session": []}
     with patch(
-        "persona_rag.graph.nodes.update_memory.update_user_memory", AsyncMock()
+        "persona_rag.graph.nodes.update_memory.update_contact_memory", AsyncMock()
     ) as mock_update:
         await update_memory_node(state)
     mock_update.assert_not_called()

@@ -12,6 +12,7 @@ from persona_rag.graph.nodes.load_memory import load_memory_node
 from persona_rag.graph.nodes.load_session import load_session
 from persona_rag.graph.nodes.openai_chat import openai_chat
 from persona_rag.graph.nodes.retrieve_hybrid import retrieve_hybrid
+from persona_rag.graph.nodes.retrieve_insights import retrieve_insights
 from persona_rag.graph.nodes.send_reply import send_reply
 from persona_rag.graph.nodes.shadow_log import shadow_log
 from persona_rag.graph.nodes.update_memory import update_memory_node
@@ -38,6 +39,7 @@ def build_graph() -> Any:
     g.add_node("auth_check", auth_check)
     g.add_node("retrieve_hybrid", retrieve_hybrid)
     g.add_node("load_memory", load_memory_node)
+    g.add_node("retrieve_insights", retrieve_insights)
     g.add_node("load_session", load_session)
     g.add_node("build_prompt", build_prompt_node)
     g.add_node("openai_chat", openai_chat)
@@ -50,7 +52,8 @@ def build_graph() -> Any:
     g.set_entry_point("auth_check")
     g.add_conditional_edges("auth_check", _route_after_auth)
     g.add_edge("retrieve_hybrid", "load_memory")
-    g.add_edge("load_memory", "load_session")
+    g.add_edge("load_memory", "retrieve_insights")
+    g.add_edge("retrieve_insights", "load_session")
     g.add_edge("load_session", "build_prompt")
     g.add_edge("build_prompt", "openai_chat")
     g.add_edge("openai_chat", "guardrails")

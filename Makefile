@@ -53,3 +53,14 @@ mlflow-ui:
 clean:
 	rm -rf .pytest_cache .ruff_cache .mypy_cache build dist *.egg-info
 	find . -type d -name __pycache__ -exec rm -rf {} +
+
+.PHONY: insights insights-full insights-dry
+
+insights:
+	uv run python scripts/distill_insights.py --mode incremental
+
+insights-full:
+	uv run python scripts/distill_insights.py --mode full
+
+insights-dry:
+	uv run python scripts/distill_insights.py --dry-run
