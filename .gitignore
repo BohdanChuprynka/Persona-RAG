@@ -29,6 +29,9 @@ data/eval/*
 exports/
 parsed/
 
+# Model weights (gguf) — large; commit the Modelfile, not the weights
+models/*.gguf
+
 # MLflow local backend
 mlruns/
 mlartifacts/

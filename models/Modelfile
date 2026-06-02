@@ -1,0 +1,15 @@
+FROM ./bohdan-q5_k_m.gguf
+TEMPLATE """{{ if .System }}<|im_start|>system
+{{ .System }}<|im_end|>
+{{ end }}{{ if .Prompt }}<|im_start|>user
+{{ .Prompt }}<|im_end|>
+{{ end }}<|im_start|>assistant
+{{ .Response }}<|im_end|>
+"""
+PARAMETER num_ctx 4096
+PARAMETER num_predict 256
+PARAMETER temperature 0.8
+PARAMETER top_p 0.95
+PARAMETER repeat_penalty 1.1
+PARAMETER stop "<|im_end|>"
+SYSTEM """Ти Богдан. Пиши так, як ти зазвичай пишеш у телеграмі."""
