@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="420" viewBox="0 0 1200 420" role="img" aria-label="Persona-RAG: a Telegram bot that texts like you, grounded in your own chat history. No fine-tuning required.">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0f172a"/>
+      <stop offset="1" stop-color="#0b1120"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#818cf8"/>
+      <stop offset="1" stop-color="#6366f1"/>
+    </linearGradient>
+  </defs>
+
+  <!-- canvas -->
+  <rect width="1200" height="420" fill="url(#bg)"/>
+  <rect x="0.5" y="0.5" width="1199" height="419" fill="none" stroke="#1e293b" stroke-width="1"/>
+
+  <!-- top accent rule -->
+  <rect x="64" y="56" width="44" height="4" rx="2" fill="url(#accent)"/>
+
+  <!-- title -->
+  <text x="64" y="118" font-family="-apple-system, 'Segoe UI', Roboto, sans-serif" font-size="58" font-weight="700" letter-spacing="-1.2" fill="#f8fafc">Persona<tspan fill="#818cf8">-</tspan>RAG</text>
+
+  <!-- tagline -->
+  <text x="64" y="160" font-family="-apple-system, 'Segoe UI', Roboto, sans-serif" font-size="21" font-weight="400" fill="#94a3b8">A Telegram bot that texts like you, grounded in your own chat history.</text>
+  <text x="64" y="190" font-family="-apple-system, 'Segoe UI', Roboto, sans-serif" font-size="21" font-weight="500" fill="#cbd5e1">No fine-tuning required.</text>
+
+  <!-- pipeline flow -->
+  <!-- connectors (drawn first, behind nodes) -->
+  <g stroke="#334155" stroke-width="2" fill="none">
+    <line x1="262" y1="280" x2="306" y2="280"/>
+    <line x1="616" y1="280" x2="660" y2="280"/>
+    <line x1="852" y1="280" x2="896" y2="280"/>
+  </g>
+  <g fill="#475569">
+    <path d="M306 280 l-9 -5 v10 z"/>
+    <path d="M660 280 l-9 -5 v10 z"/>
+    <path d="M896 280 l-9 -5 v10 z"/>
+  </g>
+
+  <!-- node 1: Your chats -->
+  <rect x="64" y="248" width="198" height="64" rx="14" fill="#111c33" stroke="#334155" stroke-width="1.5"/>
+  <text x="163" y="286" text-anchor="middle" font-family="-apple-system, 'Segoe UI', Roboto, sans-serif" font-size="17" font-weight="600" fill="#e2e8f0">Your chats</text>
+
+  <!-- node 2: RAG few-shot (accent / primary step) -->
+  <rect x="306" y="248" width="310" height="64" rx="14" fill="#1c1b3a" stroke="#6366f1" stroke-width="1.5"/>
+  <text x="461" y="280" text-anchor="middle" font-family="-apple-system, 'Segoe UI', Roboto, sans-serif" font-size="17" font-weight="600" fill="#c7d2fe">RAG few-shot</text>
+  <text x="461" y="299" text-anchor="middle" font-family="-apple-system, 'Segoe UI', Roboto, sans-serif" font-size="13" font-weight="400" fill="#818cf8">Qdrant + MMR</text>
+
+  <!-- node 3: LangGraph -->
+  <rect x="660" y="248" width="192" height="64" rx="14" fill="#111c33" stroke="#334155" stroke-width="1.5"/>
+  <text x="756" y="286" text-anchor="middle" font-family="-apple-system, 'Segoe UI', Roboto, sans-serif" font-size="17" font-weight="600" fill="#e2e8f0">LangGraph</text>
+
+  <!-- node 4: Reply in your voice -->
+  <rect x="896" y="248" width="240" height="64" rx="14" fill="#111c33" stroke="#334155" stroke-width="1.5"/>
+  <text x="1016" y="286" text-anchor="middle" font-family="-apple-system, 'Segoe UI', Roboto, sans-serif" font-size="17" font-weight="600" fill="#e2e8f0">Reply in your voice</text>
+
+  <!-- runtime swap secondary line -->
+  <g>
+    <circle cx="71" cy="360" r="3" fill="#6366f1"/>
+    <text x="84" y="365" font-family="-apple-system, 'Segoe UI', Roboto, sans-serif" font-size="14" font-weight="400" fill="#64748b">Runtime</text>
+    <text x="152" y="365" font-family="-apple-system, 'Segoe UI', Roboto, sans-serif" font-size="14" font-weight="600" fill="#94a3b8">OpenAI</text>
+    <text x="216" y="365" font-family="-apple-system, 'Segoe UI', Roboto, sans-serif" font-size="14" font-weight="400" fill="#475569">or</text>
+    <text x="244" y="365" font-family="-apple-system, 'Segoe UI', Roboto, sans-serif" font-size="14" font-weight="600" fill="#94a3b8">local LoRA</text>
+    <text x="334" y="365" font-family="-apple-system, 'Segoe UI', Roboto, sans-serif" font-size="14" font-weight="400" fill="#64748b">(Ollama)</text>
+  </g>
+</svg>

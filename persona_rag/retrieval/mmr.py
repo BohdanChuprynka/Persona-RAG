@@ -1,6 +1,6 @@
 """Maximal Marginal Relevance reranking for the few-shot pool.
 
-Per spec docs/superpowers/specs/2026-05-31-mmr-retrieval-design.md §5.1.
+Maximal marginal relevance reranking for retrieval diversity.
 """
 
 from __future__ import annotations

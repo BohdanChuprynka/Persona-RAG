@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Literal, TypedDict
 
 from pydantic import BaseModel
@@ -9,7 +9,7 @@ from pydantic import BaseModel
 Channel = Literal["telegram", "instagram"]
 
 
-class UserState(str, Enum):
+class UserState(StrEnum):
     UNKNOWN = "unknown"
     PENDING = "pending"
     WHITELISTED = "whitelisted"

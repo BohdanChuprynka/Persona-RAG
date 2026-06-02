@@ -38,6 +38,7 @@ dev = [
     "ruff>=0.6",
     "mypy>=1.11",
     "pre-commit>=3.7",
+    "types-PyYAML>=6",
 ]
 
 [build-system]
@@ -63,6 +64,13 @@ strict = true
 warn_unreachable = true
 disallow_untyped_defs = true
 disallow_incomplete_defs = true
+
+[[tool.mypy.overrides]]
+# Third-party deps without type stubs or a py.typed marker: langdetect (core,
+# installed, untyped) and sentence-transformers (optional style-embedding scorer,
+# not installed in CI, import guarded at runtime).
+module = ["langdetect.*", "sentence_transformers.*"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

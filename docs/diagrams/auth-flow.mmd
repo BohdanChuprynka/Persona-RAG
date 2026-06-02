@@ -1,25 +1,31 @@
 stateDiagram-v2
-    [*] --> Unknown : new user DMs bot
+    [*] --> UNKNOWN : ensure_user (new DM)
 
-    Unknown --> Pending : bot sends auth request to admin\nbuffers user msgs
-    Pending --> Whitelisted : admin taps Approve\nreply: 'you are in'
-    Pending --> Blocked : admin taps Block\nsilent on user side
+    UNKNOWN --> PENDING : first message<br/>request_admin_approval
 
-    Whitelisted --> Revoked : admin /revoke
-    Revoked --> Whitelisted : admin re-approves
-    Blocked --> Unknown : admin /unblock
+    PENDING --> WHITELISTED : admin taps Approve<br/>approve_user
+    PENDING --> BLOCKED : admin taps Block<br/>block_user
 
-    Whitelisted --> [*] : admin deletes user
+    WHITELISTED --> [*] : normal reply flow
+    BLOCKED --> [*] : silenced
 
-    note right of Pending
-        Up to PENDING_BUFFER_SIZE
-        messages buffered while
-        admin decides.
-        User sees: "Awaiting approval..."
+    note right of PENDING
+        buffer_pending_message
+        stores msgs in PendingMessage
+        User: "Awaiting approval.
+        You'll hear back soon."
+        Admin DM has inline keyboard:
+        approve:&lt;id&gt; / block:&lt;id&gt;
     end note
 
-    note right of Whitelisted
-        Normal reply flow.
-        Per-user memory active.
-        Subject to rate limits.
+    note right of WHITELISTED
+        approve_user sets WHITELISTED
+        Reply: "Authorized. I'm online."
+        Logs AuditLog action=approve
+    end note
+
+    note right of BLOCKED
+        block_user sets BLOCKED
+        Silent on user side
+        Logs AuditLog action=block
     end note

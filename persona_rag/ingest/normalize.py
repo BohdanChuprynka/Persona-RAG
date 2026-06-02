@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 from typing import Any
 
-from langdetect import (  # type: ignore[import-not-found]
+from langdetect import (
     DetectorFactory,
     LangDetectException,
     detect,

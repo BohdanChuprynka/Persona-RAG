@@ -1,175 +1,133 @@
 # Evaluation
 
-How to measure whether the bot actually sounds like the persona. Every run tracked in MLflow.
+How to measure whether the bot sounds like the persona. The runner replays held-out turns through the live graph and scores generated replies against the real ones by distribution.
 
-## Why this matters
+## Why distributional stylometry beats BLEU/ROUGE
 
-The predecessor project used BLEU/ROUGE — n-gram overlap with a single reference reply. Persona is a *distribution*. Two replies with zero word overlap can both be perfectly in-character. BLEU/ROUGE optimize for the wrong thing.
+BLEU and ROUGE score n-gram overlap against a single reference reply. A persona is a distribution, not one string. Two replies with zero shared words can both be in voice, and a reply that copies the reference n-grams can still be out of voice if its shape is wrong. Overlap metrics reward surface copying and stay blind to shape failures.
 
-This project measures three dimensions independently and logs them per run to MLflow:
+The concrete failure they miss is shape uniformity. The legacy `persona_rag/eval/stylometry.py` reduces each side to a corpus mean, so a bot that always emits one 45-character bubble scores near zero against a real speaker who alternates between one-word bursts and four-message replies. The mean matches while the distribution is wrong. `persona_rag/eval/distribution.py` exists to make that gap visible by comparing full distributions of message shape, per-bubble length, punctuation, code-switch, and opener choice.
 
-1. **Stylometric match** — statistical fingerprint similarity
-2. **Semantic plausibility** — perplexity-proxy against persona's real replies
-3. **Human A/B** — can a friend tell bot apart from real persona
+## The runner
+
+`make eval` runs `scripts/eval_persona.py` (no arguments). The CLI accepts `--n` (held-out turns to sample, default 80), `--seed`, `--name`, `--model` (override the generation model for this run only), and `--register` (`on`/`off` to A/B the register-aware tone fix without touching `.env`).
+
+```bash
+make eval
+uv run python scripts/eval_persona.py --n 80 --seed 0 --name baseline
+uv run python scripts/eval_persona.py --n 80 --name reg-off --register off
+```
+
+Each run:
+
+1. Samples held-out turns (`eval_split == True`) that have a real reply and a non-empty incoming context.
+2. Sets `SHADOW_MODE=true` and `MEMORY_UPDATE_INTERVAL_TURNS=0` before importing settings, so the graph skips the Telegram send and the paid memory-update calls do not fire during replay.
+3. Seeds each turn's prior context as session history, then invokes the full graph on the final incoming message and reads `state["reply"]`.
+4. Scores all generated replies against all real replies with `persona_distance`, plus the optional authorship cosine.
+5. Writes `data/eval/<name>/pairs.csv` and `data/eval/<name>/scorecard.json`, then prints a human scorecard to stdout.
 
 ## Held-out split
 
-Last 10% of `PersonaTurn` rows by `timestamp` are tagged `eval_split=true` at ingest time and **excluded from retrieval** (Qdrant filter on `eval_split=false`). They never appear in few-shot examples. They serve as the ground truth for everything below.
+Two split mechanisms exist for two consumers.
 
-Time-based, not random — random splits leak today's style into the past corpus.
+**Retrieval / eval (temporal tail).** `mark_eval_split` in `persona_rag/ingest/turns.py` sorts turns by timestamp and tags the last 10% as `eval_split=True`. This is the `eval_split` column written to SQLite and indexed in Qdrant. Retrieval excludes it: `persona_rag/index/qdrant_store.py` adds `FieldCondition(key="eval_split", match=MatchValue(value=False))` by default, so held-out turns never appear in few-shot examples. `scripts/eval_persona.py` samples from this set as ground truth.
 
-## Shadow mode (data collection runtime)
+**Fine-tune export (recipient-stratified hash).** A temporal tail puts the English-heavy recent months entirely in eval, which made the `latin_script_rate` target unreachable for the fine-tune set. `eval_split_for` in `persona_rag/finetune/dataset.py` replaces it with a deterministic SHA-1 hash of the turn id (`int(h[:8], 16) % 1000 < frac * 1000`). Each recipient is split independently at the same fraction, so train and eval share the same recipient mix and therefore the same code-switch register. The fine-tune dataset uses this hash, not the DB column.
 
-`SHADOW_MODE=true` turns the bot into a logger. Every incoming message:
+Both are deterministic and reproducible. Neither is random across the whole corpus, because a random split leaks today's style into the past.
 
-1. Walks the full LangGraph (auth → retrieve → prompt → generate → guardrails)
-2. **Does not send** the reply to Telegram
-3. Appends a JSONL row to `data/shadow_log.jsonl`:
+The ingest pipeline produces this split and the train/eval boundary that feeds the indices:
+
+```mermaid
+flowchart LR
+    A1[Telegram result.json] --> P1[parse_telegram_export]
+    A2[Instagram messages JSON] --> P2[walk_instagram_folder]
+
+    P1 --> N[normalize_message<br/>BLAKE2b hash_id<br/>chat_id + sender_id,<br/>detect_language]
+    P2 --> N
+
+    N --> R[redact PII<br/>phones, emails,<br/>addresses, names]
+    R --> C[collapse_bursts<br/>+ split_sessions<br/>by chat, time gap]
+    C --> T[extract_persona_turns<br/>your_reply + incoming_context]
+    T --> M[mark_eval_split<br/>last 10% by timestamp]
+
+    M --> E[embed_batch<br/>OpenAI, batch=128]
+    M --> ST[compute_anchors]
+    M --> DB[(SQLite<br/>persona_turns)]
+    M --> BM[BM25 build_bm25<br/>data/bm25.pkl<br/>train split only]
+
+    E --> Q[(Qdrant<br/>persona_turns)]
+    ST --> SA[data/style_anchors.json]
+
+    style N fill:#dbeafe
+    style R fill:#fef3c7
+    style E fill:#dcfce7
+```
+
+## The metrics
+
+All metrics are pure functions in `persona_rag/eval/distribution.py`. The code is the source of truth for every formula. Bubbles are Telegram messages split by `split_bubbles` in `persona_rag/generate/bubbles.py` (newline split, blanks dropped).
+
+### Headline distances (lower is closer to the real speaker)
+
+| Key | Function | What it measures |
+|---|---|---|
+| `shape_js` | `js_divergence(shape_histogram(real), shape_histogram(gen))` | Jensen-Shannon divergence between the bubble-count-per-reply histograms (bucketed 1..6). Log base 2, so bounded [0, 1]. 0 = identical shape, 1 = disjoint. This is the primary number; it catches shape uniformity. |
+| `len_wasserstein` | `wasserstein_1d` | 1-D Wasserstein (earth-mover) distance between the per-bubble character-length samples. |
+| `len_ks` | `ks_statistic` | Kolmogorov-Smirnov statistic: max gap between the two empirical length CDFs. |
+
+### Voice-fingerprint rates (compared real vs gen, not reduced to one distance)
+
+| Key | Function | Signal |
+|---|---|---|
+| `latin_script_rate` | `latin_script_rate` | Share of alphabetic tokens in Latin vs Cyrillic script. The code-switch signal. A bot pinned to one language drops near zero. |
+| `paren_smiley_rate` | `paren_smiley_rate` | Fraction of bubbles containing a paren-smiley, detected as an unbalanced close paren (`)` count > `(` count) so ordinary parentheticals do not count. The signature tic the emoji-codepoint metric is blind to. |
+| `opener_top_share` | `opener_top_share` | Share of replies that open with the single most common first word. The opener-monotony signal: a bot that opens every reply the same way scores high. |
+
+`persona_distance` returns `shape_js`, `len_wasserstein`, `len_ks`, `pct_single_real`, `pct_single_gen`, and the full `summarize` dict for each side (`real`, `gen`). The summary carries `shape_hist`, `bubble_len_median`, `bubble_len_mean`, `caps_ratio_mean`, `punct_density_mean`, `emoji_rate_mean`, and the three rates above. The printed scorecard renders the shape histogram side by side, the percentage of single-message replies, and real-vs-gen lines for each rate.
+
+### Optional authorship cosine
+
+`style_self_sim` is a content-independent voice-fidelity signal from `persona_rag/eval/authorship.py`. It embeds replies with a style encoder (`StyleDistance/styledistance` by default, overridable via `STYLE_EMBED_MODEL`), builds a reference centroid from the real replies (`reference_vector`), and scores the generated replies by mean cosine to it (`self_similarity`). Higher is more like the persona's surface voice, and it survives code-switch and topic drift in a way the deterministic distances cannot.
+
+The encoder needs `torch` and a model download, so it is lazy and guarded by try/except at the call site in `scripts/eval_persona.py`. When the model is not installed, `style_self_sim` is `None` and the rest of the scorecard is unaffected. The same centroid (`cached_reference_vector`, train-split only) doubles as the best-of-N selector in the live generate path when `BEST_OF_N > 1`.
+
+## Reading the scorecard
+
+`data/eval/<name>/scorecard.json` holds the distances, the optional `style_self_sim`, `n_generated`, `seed`, a timestamp, and the run params: `top_k`, `alpha` (`HYBRID_DENSE_ALPHA`), `mmr_enabled`, `register_aware`, `shape_hint`, `best_of_n`, `paren_logit_bias`, `backend` (`GENERATION_BACKEND`), `model`, `temperature`, and `score_floor` (`HYBRID_SCORE_FLOOR`). Those params are what you change between runs to find what moves the distances.
+
+Run two configs (for example `--register on` and `--register off`, or two `--model` values) with the same `--seed`, then compare their scorecards. `shape_js` and `len_wasserstein` are the numbers to watch first. If they are flat and the rates are off, look at `latin_script_rate`, `paren_smiley_rate`, and `opener_top_share` for the specific tic that is wrong.
+
+## Shadow mode and the (incoming, real, generated) triple
+
+`pairs.csv` is the blind A/B substrate. Each row is `(incoming, real, generated)`, written through the `csv` module so embedded quotes, commas, and newlines round-trip. A rater can read `real` against `generated` in random order and pick "more like me" without knowing which is which. The same triple is the future DPO training pair: `chosen = real`, `rejected = generated`.
+
+Shadow mode also runs against live traffic, not just held-out replay. `SHADOW_MODE=true` routes the graph through the `shadow_log` node (`persona_rag/graph/compile.py`) instead of sending the reply. `write_shadow_entry` in `persona_rag/shadow/logger.py` appends a JSONL row to `data/shadow_log.jsonl` (`SHADOW_LOG_PATH`):
 
 ```json
 {
-  "ts": "2026-05-17T14:23:11Z",
+  "ts": "...",
   "session_id": "uuid",
-  "user_id_hash": "blake2b(...)",
-  "incoming": "actual friend message",
+  "user_id_hash": "...",
+  "incoming": "actual incoming message",
   "context": ["..."],
-  "retrieved_ids": ["uuid1", "uuid2"],
+  "retrieved_ids": ["..."],
   "memory_summary": "...",
   "generated_reply": "what the bot would have said",
   "your_actual_reply": null,
   "model": "gpt-4o-mini",
-  "params": {"top_k": 8, "alpha": 0.7, "temperature": 0.8, "prompt_version": "v1"}
+  "params": {"...": "..."}
 }
 ```
 
-`your_actual_reply` is backfilled later from your real Telegram export when you re-ingest. Once enough triples accumulate, this becomes:
+`your_actual_reply` is null at write time and backfilled later from the real Telegram export on re-ingest. Once enough triples accumulate, the (incoming, generated, your_actual_reply) set becomes the blind A/B corpus against true ground truth and the DPO dataset for the fine-tune phase.
 
-- The dataset for **Metric 3** (human A/B against real ground truth)
-- The DPO training set for Phase 2 (chosen=your_actual, rejected=generated)
+## MLflow
 
-## Metric 1 — Stylometric match
+MLflow runs as a compose service (`docker-compose.yml`), image `ghcr.io/mlflow/mlflow:v2.16.0`, published on host port 5001 mapped to container port 5000 (macOS AirPlay holds 5000). `make up` starts it alongside Qdrant; `make mlflow-ui` opens `http://localhost:5001`. Config defaults are `MLFLOW_TRACKING_URI=file:./mlruns` and `MLFLOW_EXPERIMENT=persona-rag-eval`.
 
-`scripts/eval_persona.py --metric stylometry`
+`persona_rag/eval/mlflow_wrap.py` provides `log_eval_run`, a wrapper that ensures the experiment exists, opens a run, and logs params, metrics, tags, and artifacts. The current `scripts/eval_persona.py` writes `scorecard.json` and `pairs.csv` to `data/eval/<name>/` and does not call `log_eval_run` itself, so MLflow logging is wiring that is available but not yet invoked by the runner.
 
-For each held-out turn `t`:
+## CI
 
-- Feed bot `t.incoming_context` as if real incoming
-- Generate a reply `r`
-- Compute features for both `r` and `t.your_reply`
-
-| Feature | What |
-|---|---|
-| `len_chars` | Character length |
-| `len_words` | Word count |
-| `emoji_rate` | Emojis / total characters |
-| `caps_ratio` | Uppercase chars / total alpha |
-| `punct_density` | Punctuation per word |
-| `lang_mix` | Fraction in each language |
-| `avg_word_len` | Mean word length |
-| `lexical_diversity` | type/token ratio |
-| `top_bigram_jaccard` | Jaccard of top-20 bigrams vs persona corpus |
-
-Report: per-feature mean absolute deviation between bot and real + composite score (z-normalized sum, lower=better).
-
-**MLflow logging:**
-- Params: model, top_k, alpha, recency_half_life, prompt_version, temperature
-- Metrics: each feature MAD + composite
-- Artifacts: per-turn diff CSV
-
-## Metric 2 — Semantic plausibility
-
-`scripts/eval_persona.py --metric perplexity-proxy`
-
-For each held-out turn `t`:
-
-- Build the bot's prompt as in production
-- Ask the LLM to *score* the real reply with logprobs (no generation)
-- Compute mean per-token logprob of `t.your_reply` under the bot's prompt distribution
-
-Higher mean logprob = the bot's prompt setup "expects" replies that match the persona's actual reply. Proxy for true perplexity that works with OpenAI's `logprobs` API.
-
-Comparison baselines (each its own MLflow run):
-
-- `TOP_K=0` (no retrieval) — measures the lift retrieval provides
-- Random retrievals (same `TOP_K`) — measures whether *relevant* retrievals matter
-- Shuffled few-shot order — measures whether ordering matters
-- `gpt-4o-mini` vs `gpt-4o` — model lift
-
-## Metric 3 — Human A/B
-
-The gold standard. Two protocols, both logged to MLflow.
-
-### Shadow-vs-real A/B (no friends required)
-
-Once shadow mode has logged `your_actual_reply` for ≥100 triples:
-
-`scripts/eval_persona.py --metric ab-self`
-
-For each triple:
-- Present `(generated_reply, your_actual_reply)` in random order to a rater (you, blind)
-- Rater picks "more like me"
-
-Track:
-- Bot-pick rate (target ≈ 50% = indistinguishable)
-- Per-feature breakdown of when bot is picked
-
-### Friend A/B (after launch)
-
-Recruit 3–5 trusted friends. Randomly half of the bot's replies in a session are real-you (you type), half are bot. At session end, friends label which were bot.
-
-Track:
-- Detection accuracy per friend (50% = perfect bot)
-- Patterns from notes — what features tip them off
-
-## MLflow run anatomy
-
-Each `make eval` invocation creates one parent run with N child runs (one per metric):
-
-```
-experiment: persona-rag-eval
-├── run: 2026-05-17-v1.2-baseline
-│   ├── params: {prompt_version: v1.2, top_k: 8, alpha: 0.7, model: gpt-4o-mini, ...}
-│   ├── tags: {dataset_version: ingest-2026-05-15, persona_name: <name>}
-│   ├── metrics:
-│   │   stylometry_composite: 1.23
-│   │   stylometry_emoji_rate_mad: 0.005
-│   │   stylometry_len_chars_mad: 12.3
-│   │   perplexity_proxy_mean_logprob: -1.47
-│   │   perplexity_proxy_baseline_no_retrieval: -2.91
-│   │   ab_self_bot_pick_rate: 0.42
-│   └── artifacts:
-│       per_turn_features.csv
-│       sample_replies.md
-└── ...
-```
-
-Compare runs side-by-side in the MLflow UI (`localhost:5001` via docker-compose). Filter by `prompt_version` or `model` to A/B prompt designs.
-
-## Reporting
-
-`scripts/eval_persona.py` also writes a human-readable markdown report:
-
-```
-data/eval/2026-MM-DD-eval-report.md
-```
-
-Contains:
-- Headline composite numbers
-- Per-feature deviation table
-- 10 sampled (real, bot) pairs side-by-side for qualitative check
-- Link to MLflow run
-- Trend chart vs last 5 runs
-
-CI does NOT run eval — costs money, slow. Run manually after prompt or schema changes.
-
-## When to act on the numbers
-
-| Signal | Likely cause | Fix |
-|---|---|---|
-| Stylometric `emoji_rate` way off | Bot strips emojis | Check tokenizer / prompt instructions |
-| `len_chars` too high | LLM verbosity bias | Lower `MAX_REPLY_TOKENS`, add "short replies" instruction |
-| Mean logprob low + retrieval baseline high | Retrieval is hurting | Check embedding model, recency weight |
-| Mean logprob low across the board | Wrong base model | Try `gpt-4o` |
-| Bot-pick rate ≪ 50% | Bot is identifiable as bot | Look at qualitative samples |
-| Bot-pick rate ≈ 50% | Indistinguishable. Ship it. | — |
-| Bot-pick rate > 60% | Suspiciously human — check for leakage of held-out into retrieval | Verify `eval_split` filter is on |
+CI does not run eval. It generates replies through OpenAI, which costs money and is slow. Run it manually after a prompt, retrieval, or schema change. The repo has 72 Python test files for the deterministic units (split logic, the pure distribution functions, the centroid and cosine math); those run in CI and cover everything in `distribution.py` and `authorship.py` that does not need a model or the live graph.

@@ -306,7 +306,6 @@ async def test_persist_insights_updates_auto_in_place(tmp_path, monkeypatch):
 
 
 # --- Stage C checkpointing: _persist_raws_and_mark ---
-# See docs/superpowers/specs/2026-05-26-stage-c-checkpointing-design.md.
 
 
 def _raw(session_id: str, subject: str = "x", text: str = "t", conf: float = 0.5) -> RawInsight:

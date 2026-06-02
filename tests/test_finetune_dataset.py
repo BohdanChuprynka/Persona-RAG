@@ -3,7 +3,9 @@
 
 from __future__ import annotations
 
-from persona_rag.finetune.dataset import clean_reply, eval_split_for, to_sharegpt
+from datetime import datetime, timedelta
+
+from persona_rag.finetune.dataset import clean_reply, eval_split_for, to_sharegpt, within_months
 
 
 def test_basic_pair_maps_to_human_gpt_turns():
@@ -81,3 +83,18 @@ class TestEvalSplitFor:
     def test_roughly_ten_percent(self):
         held = sum(1 for i in range(10000) if eval_split_for(f"turn-{i}"))
         assert 0.07 <= held / 10000 <= 0.13
+
+
+class TestWithinMonths:
+    """Recency filter — train on current-you, not averaged-over-6-years-you."""
+
+    _NEWEST = datetime(2026, 5, 20)
+
+    def test_newest_itself_is_within(self):
+        assert within_months(self._NEWEST, self._NEWEST, 12) is True
+
+    def test_inside_window(self):
+        assert within_months(self._NEWEST - timedelta(days=100), self._NEWEST, 12) is True
+
+    def test_outside_window_is_excluded(self):
+        assert within_months(self._NEWEST - timedelta(days=400), self._NEWEST, 12) is False

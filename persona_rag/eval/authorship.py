@@ -57,7 +57,7 @@ def mean_cosine_to_ref(vectors: list[list[float]], ref: list[float]) -> float:
 def _model():  # type: ignore[no-untyped-def]
     """Load the style encoder once. Raises if sentence-transformers/model is
     unavailable — callers guard with try/except."""
-    from sentence_transformers import SentenceTransformer  # type: ignore[import-not-found]
+    from sentence_transformers import SentenceTransformer
 
     name = os.environ.get("STYLE_EMBED_MODEL", DEFAULT_STYLE_MODEL)
     return SentenceTransformer(name)

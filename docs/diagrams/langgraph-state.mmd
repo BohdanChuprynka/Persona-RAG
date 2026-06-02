@@ -1,35 +1,32 @@
+%% C4 Level 3 - Component: per-message request pipeline (persona_rag/graph/compile.py)
+%% 12 nodes in compile order + 2 conditional branch points (_route_after_auth, _route_after_guardrails)
 flowchart TD
     Start([incoming message]) --> AuthCheck{auth_check}
 
-    AuthCheck -- whitelisted --> RetrieveHybrid[retrieve_hybrid<br/>Qdrant dense + BM25]
-    AuthCheck -- unknown --> AuthRequest[auth_request_admin<br/>buffer message]
-    AuthCheck -- pending --> PendingReply[reply_awaiting]
-    AuthCheck -- blocked --> EndSilent([silent end])
+    %% _route_after_auth: unauthorized -> END; ollama -> load_memory (skip retrieve_hybrid); else -> retrieve_hybrid
+    AuthCheck -- "not whitelisted" --> EndUnauth([END])
+    AuthCheck -- "backend = ollama" --> LoadMem[load_memory]
+    AuthCheck -- "else (openai)" --> RetrieveHybrid[retrieve_hybrid<br/>Qdrant dense + BM25 few-shot]
 
-    RetrieveHybrid --> Rerank[recency_decay_rerank]
-    Rerank --> LoadMem[load_user_memory]
-    LoadMem --> LoadSession[load_current_session]
+    RetrieveHybrid --> LoadMem
+    LoadMem --> RetrieveInsights[retrieve_insights]
+    RetrieveInsights --> LoadSession[load_session]
     LoadSession --> BuildPrompt[build_prompt<br/>cacheable prefix]
-    BuildPrompt --> Generate[openai_chat<br/>gpt-4o-mini]
-    Generate --> Guard[guardrails<br/>PII / length / refuse-list]
+    BuildPrompt --> OpenAIChat[openai_chat]
+    OpenAIChat --> Guardrails[guardrails<br/>PII / length / refuse-list]
 
-    Guard --> ShadowFork{shadow_mode?}
-    ShadowFork -- true --> ShadowLog[append shadow_log.jsonl<br/>NO send]
-    ShadowFork -- false --> Send[send_telegram_reply]
+    %% _route_after_guardrails: SHADOW_MODE -> shadow_log; else -> send_reply
+    Guardrails --> ShadowFork{SHADOW_MODE?}
+    ShadowFork -- "true" --> ShadowLog[shadow_log<br/>append jsonl, no send]
+    ShadowFork -- "false" --> SendReply[send_reply]
 
-    Send --> AppendTurn[append session log]
-    ShadowLog --> EndShadow([end])
+    SendReply --> UpdateSession[update_session]
+    ShadowLog --> UpdateSession
+    UpdateSession --> UpdateMemory[update_memory]
+    UpdateMemory --> EndNormal([END])
 
-    AppendTurn --> CheckTimeout{session timeout?}
-    CheckTimeout -- yes --> UpdateMem[update_user_memory<br/>async background]
-    CheckTimeout -- no --> EndNormal([end])
-    UpdateMem --> EndNormal
-
-    AuthRequest --> EndWait([wait for admin])
-    PendingReply --> EndWait
-
-    style Generate fill:#dbeafe
-    style Guard fill:#fee2e2
+    style OpenAIChat fill:#dbeafe
+    style Guardrails fill:#fee2e2
     style ShadowLog fill:#e0e7ff
     style RetrieveHybrid fill:#dcfce7
-    style UpdateMem fill:#fef3c7
+    style UpdateMemory fill:#fef3c7

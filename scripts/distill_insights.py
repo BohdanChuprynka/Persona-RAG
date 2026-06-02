@@ -1,7 +1,4 @@
-"""Self-insights distillation pipeline.
-
-See docs/superpowers/specs/2026-05-22-persona-insights-design.md.
-"""
+"""Self-insights distillation pipeline."""
 
 from __future__ import annotations
 

@@ -2,8 +2,7 @@
 # Reason: prompt template contains intentional Cyrillic examples.
 """Stage C→D verification gate — audits each RawInsight against its source quote.
 
-Per spec docs/superpowers/specs/2026-05-31-insights-extraction-accuracy-design.md
-§5.5. Uses gpt-4o-mini via chat_complete. Fail-open on API errors (returns
+Uses gpt-4o-mini via chat_complete. Fail-open on API errors (returns
 verdict=None) so a verifier blip never silently drops legitimate insights.
 """
 

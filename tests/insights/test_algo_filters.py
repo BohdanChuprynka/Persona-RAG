@@ -1,4 +1,3 @@
-# ruff: noqa: RUF001
 # Reason: intentional Cyrillic test data.
 from __future__ import annotations
 

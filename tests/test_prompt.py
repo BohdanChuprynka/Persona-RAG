@@ -1,4 +1,3 @@
-# ruff: noqa: RUF001
 # Reason: Cyrillic test data exercises the insights rendering.
 from __future__ import annotations
 

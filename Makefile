@@ -1,4 +1,4 @@
-.PHONY: install hooks init-data whitelist-admin lint format type test ingest run streamlit eval up down logs mlflow-ui clean
+.PHONY: install hooks init-data whitelist-admin lint format type test ingest run run-local streamlit eval up down logs mlflow-ui clean
 
 install:
 	uv sync --all-extras
@@ -30,6 +30,11 @@ ingest:
 
 run:
 	uv run python -m persona_rag.bot.main
+
+# Same pipeline, served by the local fine-tuned LoRA via Ollama (needs `ollama
+# serve` + `ollama create bohdan -f Modelfile`). Preflights the model on startup.
+run-local:
+	uv run python -m persona_rag.bot.main --local
 
 streamlit:
 	uv run streamlit run streamlit_app/main.py
