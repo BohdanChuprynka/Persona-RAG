@@ -208,11 +208,14 @@ def _summary_md(results: dict[str, Any], cols: dict[str, list[str]], out: Path) 
     if cl:
         api_cl = f"{cl['api']['exact']:.3f}|{cl['api']['near']:.3f}"
         lora_cl = f"{cl['lora']['exact']:.3f}|{cl['lora']['near']:.3f}"
+        base = cl.get("baseline_real_vs_train")
+        base_cl = f"{base['exact']:.3f}|{base['near']:.3f}" if base else "n/a"
         lines += [
             "",
             "## Anti-gaming guards",
             "",
-            f"- copy/leak (exact|near): API {api_cl}  LoRA {lora_cl}",
+            f"- copy/leak (exact|near): API {api_cl}  LoRA {lora_cl}  "
+            f"(natural floor, real-vs-train: {base_cl})",
             f"- distinct-reply: API {arms['api']['distinct_reply_rate']:.3f}  "
             f"LoRA {arms['lora']['distinct_reply_rate']:.3f}",
             f"- empty rate: API {arms['api']['empty_rate']:.3f}  "

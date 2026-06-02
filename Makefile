@@ -1,4 +1,4 @@
-.PHONY: install hooks init-data whitelist-admin lint format type test ingest run run-local streamlit eval up down logs mlflow-ui clean
+.PHONY: install hooks init-data whitelist-admin lint format type test ingest run run-local streamlit eval up down logs mlflow-ui clean compare compare-plot compare-human compare-score
 
 install:
 	uv sync --all-extras
@@ -41,6 +41,19 @@ streamlit:
 
 eval:
 	uv run python scripts/eval_persona.py
+
+# Fair API-vs-LoRA comparison (start llama-server first; see docs/superpowers/specs).
+compare:
+	uv run python scripts/compare_persona.py --n 300 --seed 0 --name main
+
+compare-plot:
+	uv run python scripts/plot_comparison.py --name main
+
+compare-human:
+	uv run python scripts/build_human_eval.py --name main --n 100
+
+compare-score:
+	uv run python scripts/score_human_eval.py --name main
 
 up:
 	docker-compose up -d qdrant mlflow

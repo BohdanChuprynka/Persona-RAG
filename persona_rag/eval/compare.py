@@ -306,5 +306,62 @@ def compare_scorecard(
         card["copy_leak"] = {
             "api": copy_leak_rate(gen_api, train_replies),
             "lora": copy_leak_rate(gen_lora, train_replies),
+            # Natural floor: how often the REAL held-out replies near-match train.
+            # Short casual texts reuse phrases, so a backend near this floor is not
+            # overfitting — interpret lora/api copy rates relative to this.
+            "baseline_real_vs_train": copy_leak_rate(real, train_replies),
         }
     return card
+
+
+# --------------------------------------------------------------------------- #
+# blind human-preference scoring (audit §4.4) — the verdict on the real target
+# --------------------------------------------------------------------------- #
+def wilson_ci(wins: int, n: int, z: float = 1.96) -> tuple[float, float]:
+    """Wilson score 95% CI for a binomial proportion ``wins/n``; (0.5, 0.5) if n==0."""
+    if n == 0:
+        return (0.5, 0.5)
+    p = wins / n
+    denom = 1 + z * z / n
+    center = (p + z * z / (2 * n)) / denom
+    half = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / denom
+    return (center - half, center + half)
+
+
+def score_preferences(choices: dict[str, str], key: dict[str, dict[str, str]]) -> dict[str, Any]:
+    """Resolve blind A/B/tie choices into a LoRA-vs-API win-rate + Wilson CI.
+
+    ``choices``: item_id -> "A" | "B" | "tie". ``key``: item_id -> {"A": backend, "B": backend}.
+    Verdict = LoRA win-rate among DECISIVE (non-tie) items; a CI excluding 0.5 is
+    a real preference (the audit's definition of "better").
+    """
+    lora_wins = api_wins = ties = unknown = 0
+    for iid, ch in choices.items():
+        k = key.get(iid)
+        if k is None:
+            unknown += 1
+        elif ch == "tie":
+            ties += 1
+        elif ch in ("A", "B"):
+            winner = k[ch]
+            if winner == "lora":
+                lora_wins += 1
+            elif winner == "api":
+                api_wins += 1
+    decisive = lora_wins + api_wins
+    lo, hi = wilson_ci(lora_wins, decisive)
+    win_rate = lora_wins / decisive if decisive else math.nan
+    if decisive and (lo > 0.5 or hi < 0.5):
+        verdict = "lora" if win_rate > 0.5 else "api"
+    else:
+        verdict = "tie"
+    return {
+        "lora_wins": lora_wins,
+        "api_wins": api_wins,
+        "ties": ties,
+        "unknown": unknown,
+        "decisive": decisive,
+        "lora_win_rate": win_rate,
+        "wilson_95ci": [lo, hi],
+        "verdict": verdict,
+    }

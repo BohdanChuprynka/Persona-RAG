@@ -15,7 +15,9 @@ from persona_rag.eval.compare import (
     len_wasserstein_metric,
     opener_entropy,
     paired_bootstrap_delta_ci,
+    score_preferences,
     shape_js_metric,
+    wilson_ci,
 )
 
 
@@ -131,3 +133,25 @@ def test_arm_summary_keys() -> None:
         "empty_rate",
     ):
         assert k in s
+
+
+def test_wilson_ci() -> None:
+    lo, _hi = wilson_ci(18, 20)
+    assert lo > 0.5  # 90% wins -> CI clears 0.5
+    lo2, hi2 = wilson_ci(5, 10)
+    assert lo2 < 0.5 < hi2  # 50/50 -> spans 0.5
+    assert wilson_ci(0, 0) == (0.5, 0.5)
+
+
+def test_score_preferences() -> None:
+    key = {str(i): {"A": "lora", "B": "api"} for i in range(10)}
+    choices = {**{str(i): "A" for i in range(7)}, "7": "B", "8": "tie", "9": "tie"}
+    res = score_preferences(choices, key)
+    assert res["lora_wins"] == 7
+    assert res["api_wins"] == 1
+    assert res["ties"] == 2
+    assert res["decisive"] == 8
+    assert abs(res["lora_win_rate"] - 7 / 8) < 1e-9
+    assert res["verdict"] in ("lora", "tie")
+    # unknown item_ids are counted, not crashed on
+    assert score_preferences({"999": "A"}, key)["unknown"] == 1
