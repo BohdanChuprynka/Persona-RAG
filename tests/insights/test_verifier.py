@@ -1,4 +1,3 @@
-# ruff: noqa: RUF001
 # Reason: tests use Cyrillic to exercise the Ukrainian-aware verifier.
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-# ruff: noqa: RUF001, RUF003
+# ruff: noqa: RUF003
 from __future__ import annotations
 
 from datetime import UTC, datetime

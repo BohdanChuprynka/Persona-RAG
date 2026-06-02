@@ -2,7 +2,7 @@ from persona_rag.generate.guardrails import apply_guardrails
 
 
 def test_redacted_token_triggers_block():
-    out, ok = apply_guardrails("Sure, the address is <REDACTED> on Main")
+    _, ok = apply_guardrails("Sure, the address is <REDACTED> on Main")
     assert not ok
 
 
