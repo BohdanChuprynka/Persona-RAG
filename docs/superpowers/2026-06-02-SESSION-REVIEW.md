@@ -29,9 +29,9 @@ Recorded in the design spec §2. The load-bearing ones:
 
 ## Open questions only you can answer (prioritized)
 
-1. **Do you want the production-realism arm (A)?** It compares the *shipped* API (rich RAG prompt + retrieval) vs the LoRA. It's the honest "which ships better" — but needs a `turn_id`-tagged hold-out + retrieval exclusion (≈ half a day). The controlled arm we have isolates the *model*; arm A judges the *product*.
-2. **The blind human panel** (~10–15 min): open `reports/main/human_eval/rater.html`, rate 100 pairs, download `choices.json`. That's the real verdict — I can score it (win-rate + CI) when you're back.
-3. **Copy-rate threshold:** the LoRA near-copies 7–15% of training replies. Is that acceptable for short texts, or do you want the length-controlled baseline built to rule out overfitting?
+1. **Do you want the production-realism arm (A)?** It compares the *shipped* API (rich RAG prompt + retrieval) vs the LoRA — the honest "which ships better." Ready-to-execute plan + leak-safety design in [`2026-06-02-arm-a-plan.md`](2026-06-02-arm-a-plan.md) (≈ half a day). The controlled arm we have isolates the *model*; arm A judges the *product*.
+2. **The blind human panel** (~10–15 min): open `reports/main/human_eval/rater.html`, rate 100 pairs, download `choices.json` into that folder, then `make compare-score`. The scorer (win-rate + Wilson CI + per-language) is built and tested — this is the real verdict.
+3. ~~**Copy-rate threshold**~~ — **resolved while you were out:** the LoRA's ~15% near-copy ≈ the **11% natural short-text floor** (your own held-out replies near-match train 11.1%), and it near-matches *unseen* reals only 2.7% → not overfitting. No threshold decision needed.
 4. The remaining audit questions (raters/IRR, multilingual style encoder, paper go/no-go) — spec §2 / audit §6.
 
 ## How to review (suggested order)
@@ -44,10 +44,11 @@ Recorded in the design spec §2. The load-bearing ones:
 
 ## Not done / next builds
 
-- **Arm A** (production-realism) — see spec §7.
-- **Score the human panel** (once you've rated).
-- **Length-controlled copy-rate baseline.**
+- **Arm A** (production-realism) — ready-to-execute plan in [`2026-06-02-arm-a-plan.md`](2026-06-02-arm-a-plan.md).
+- **Run the human panel** — kit + scorer built (`make compare-score`); just needs your ratings.
 - **MLflow wiring + per-recipient breakdown**, multilingual style encoder, greedy/multi-seed decode — all in the audit's "nice-to-have."
+
+*(Done while you were out: copy-rate baseline → caveat resolved; human-panel scorer + tests; arm-A plan; `make compare*` targets.)*
 
 ## Privacy
 
