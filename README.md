@@ -2,6 +2,10 @@
 
 # Persona-RAG
 
+[![CI](https://github.com/BohdanChuprynka/Persona-RAG/actions/workflows/ci.yml/badge.svg)](https://github.com/BohdanChuprynka/Persona-RAG/actions/workflows/ci.yml)
+[![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
 Persona-RAG is a LangGraph-orchestrated retrieval-augmented Telegram bot that replies in your voice, grounded in your own exported chat history. You feed it your Telegram and Instagram exports, it indexes them into Qdrant, and approved friends can DM a persona that talks like you. The persona transfer works without fine-tuning: the model sees your real past replies as retrieved few-shot examples. An optional path serves a locally fine-tuned LoRA via Ollama for higher lexical voice fidelity, with the same Telegram pipeline driving either backend.
 
 ## Highlights
@@ -139,4 +143,4 @@ MIT. See [`LICENSE`](LICENSE).
 
 ## CI
 
-The CI workflow template lives at [`docs/ci-template.yml`](docs/ci-template.yml). To activate it, run `gh auth refresh -s workflow`, then move the file to `.github/workflows/ci.yml`.
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs `make lint`, `make type`, and `make test` on every push and pull request to `main`. Pushing a workflow file for the first time needs the `workflow` token scope (`gh auth refresh -s workflow`).
