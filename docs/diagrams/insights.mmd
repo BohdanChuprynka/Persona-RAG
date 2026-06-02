@@ -1,0 +1,51 @@
+%% Self-insights batch pipeline (scripts/distill_insights.py)
+%% Stages A-F. Verify gate (C->D) is optional, off by default.
+flowchart LR
+    corpus["PersonaTurnRow corpus<br/>(eval_split = false)"]
+
+    subgraph A["Stage A - algo signals"]
+        a1["run_stage_a()<br/>entity / freq signals"]
+    end
+
+    subgraph B["Stage B - sessionize"]
+        b1["build_sessions(gap_hours=6)"]
+        b2["filter_high_signal()<br/>min turns / chars / max"]
+    end
+
+    subgraph C["Stage C - gpt-4o extraction"]
+        c1["extract_from_session()<br/>INSIGHTS_EXTRACT_MODEL"]
+        c2["RawInsight + Me: quote check"]
+        c3[("raw_insight + run_state<br/>resumable checkpoint")]
+    end
+
+    V{"Verify gate (optional)<br/>_apply_verification()<br/>INSIGHTS_VERIFY_ENABLED"}
+    Vmodel["verify_raw()<br/>gpt-4o-mini<br/>drop NO, keep YES/AMBIGUOUS"]
+
+    subgraph D["Stage D - consolidate"]
+        d1["consolidate()<br/>load_synonyms()"]
+        d2["ConsolidatedInsight<br/>evidence / distinct_partners"]
+    end
+
+    subgraph E["Stage E - route gates"]
+        e1["route_insight()<br/>confidence / evidence<br/>distinct-partner / staleness"]
+        e2["review_status:<br/>auto | pending"]
+    end
+
+    subgraph F["Stage F - persist"]
+        f1["persist_insights()"]
+        f2[("SQLite InsightRow")]
+        f3[("Qdrant self_insights<br/>embed + upsert auto/approved")]
+    end
+
+    corpus --> a1
+    a1 -->|"persist_algo_signals()"| b1
+    b1 --> b2
+    b2 --> c1
+    c1 --> c2 --> c3
+    c3 --> V
+    V -->|"enabled"| Vmodel --> d1
+    V -. "disabled (default)" .-> d1
+    d1 --> d2 --> e1
+    e1 --> e2 --> f1
+    f1 --> f2
+    f1 --> f3

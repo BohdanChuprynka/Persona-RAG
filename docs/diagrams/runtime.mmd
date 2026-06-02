@@ -1,39 +1,37 @@
-flowchart TD
-    A[Friend Telegram message] --> B[aiogram handler]
-    B --> LG[LangGraph.invoke]
+sequenceDiagram
+    autonumber
+    actor TG as Telegram (friend)
+    participant DP as aiogram Dispatcher
+    participant CH as chat.on_message
+    participant AU as ensure_user (auth)
+    participant RB as TokenBucket
+    participant DT as debug_trace
+    participant LG as graph.ainvoke
 
-    subgraph Graph[LangGraph state machine]
-        AC[auth_check] --> Branch{user state}
-        Branch -- whitelisted --> R[retrieve_hybrid<br/>Qdrant + BM25]
-        Branch -- unknown --> AR[auth_request_admin]
-        Branch -- pending --> PR[reply_awaiting]
-        Branch -- blocked --> SE([silent])
+    TG->>DP: text message (not /command)
+    DP->>CH: route via chat.router
+    CH->>AU: ensure_user(id, username, first_name)
+    AU-->>CH: UserState
 
-        R --> RR[recency_rerank]
-        RR --> M[load_user_memory]
-        M --> S[load_session]
-        S --> BP[build_prompt<br/>cacheable prefix + dynamic suffix]
-        BP --> G[openai_chat<br/>gpt-4o-mini]
-        G --> GR[guardrails]
-        GR --> SF{shadow?}
-        SF -- yes --> SL[append shadow_log]
-        SF -- no --> SD[send_reply]
-        SD --> AT[append_session_log]
-        AT --> CT{session timeout?}
-        CT -- yes --> UM[update_user_memory<br/>async]
-        CT -- no --> EE([end])
-        UM --> EE
-        SL --> EE
-        AR --> EE
-        PR --> EE
-        SE --> EE
+    alt UNKNOWN
+        CH->>TG: request_admin_approval
+    else PENDING
+        CH->>TG: "Still awaiting approval."
+    else BLOCKED
+        CH-->>DP: return (silent)
+    else WHITELISTED
+        CH->>RB: allow(user_id)
+        alt rate-limited
+            RB-->>CH: False
+            CH->>TG: "Slow down a sec."
+        else allowed
+            RB-->>CH: True
+            CH->>CH: attach_bot(bot)
+            CH->>LG: ainvoke{user_id, chat_id, incoming}
+            Note over LG: see langgraph-state.mmd<br/>(node graph)
+            LG->>TG: send_reply bubbles
+            LG-->>CH: final{retrieved, prompt, reply}
+            CH->>DT: record(incoming, retrieved, prompt, reply)
+            CH->>CH: log message_processed
+        end
     end
-
-    LG --> O[Send Telegram reply]
-    LG -.trace.-> LSM[LangSmith]
-
-    style G fill:#dbeafe
-    style GR fill:#fee2e2
-    style SL fill:#e0e7ff
-    style R fill:#dcfce7
-    style UM fill:#fef3c7

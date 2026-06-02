@@ -1,0 +1,49 @@
+%% C4 Level 2: Container diagram for Persona-RAG
+%% Rendered as a standard Mermaid flowchart (GitHub-compatible).
+flowchart TB
+    user([Telegram User])
+    tg[["Telegram Bot API<br/>(external)"]]
+    openai[["OpenAI API<br/>chat + embeddings"]]
+    ollama[["Ollama<br/>local LoRA (bohdan)"]]
+
+    subgraph PRAG["Persona-RAG"]
+        direction TB
+
+        bot["Bot Service<br/>[aiogram] handlers + DI"]
+        engine["LangGraph Engine<br/>[langgraph] compiled state machine<br/>auth → retrieve → build_prompt → chat → guardrails → send"]
+        demo["Streamlit Demo UI<br/>[streamlit] :8501"]
+
+        qdrant[("Qdrant<br/>[vector DB] :6333<br/>chat turns + insights")]
+        sqlite[("SQLite Store<br/>[sqlmodel] sessions, memory, whitelist")]
+        mlflow["MLflow<br/>[mlflow] :5001 tracking + artifacts"]
+
+        ingest["Ingest Pipeline<br/>scripts/ingest.py"]
+        insights["Insights Pipeline<br/>scripts/distill_insights.py"]
+        evalft["Eval + Fine-tune<br/>scripts/eval_persona.py + Colab LoRA"]
+    end
+
+    %% Runtime request path
+    user -->|message| tg
+    tg -->|update| bot
+    bot -->|invoke per turn| engine
+    engine -->|hybrid + insight retrieval| qdrant
+    engine -->|sessions / persona memory| sqlite
+    engine -->|generate reply| openai
+    engine -->|generate reply, --local| ollama
+    engine -->|reply text| bot
+    bot -->|sendMessage| tg
+    tg -->|reply| user
+
+    %% Demo UI shares the engine
+    demo -->|invoke| engine
+
+    %% Batch pipelines write the stores
+    ingest -->|embed + upsert turns| qdrant
+    ingest -->|seed metadata| sqlite
+    insights -->|distill + upsert insights| qdrant
+    insights -->|read source turns| sqlite
+
+    %% Observability + offline eval
+    engine -.->|metrics / shadow logs| mlflow
+    evalft -.->|log scores| mlflow
+    evalft -->|score replies| openai
