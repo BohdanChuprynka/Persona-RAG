@@ -4,8 +4,8 @@
 """Incoming-message register detection.
 
 The persona had a single register — terse banter — and no notion of emotional
-tone. So when a friend opened up ("***REMOVED***") the bot
-gave the same flippant 2-bubble brush-off it gives a one-word ping. That reads
+tone. So when an incoming message carries real distress instead of banter, the
+bot gives the same flippant 2-bubble brush-off it gives a one-word ping. That reads
 as emotionless. Register detection lets generation adapt the *engagement*, not
 just the voice:
 

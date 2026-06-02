@@ -144,30 +144,6 @@ uv run python scripts/build_colab_notebook.py
 
 `tests/test_colab_notebook_in_sync.py` is the sync guard. It imports the generator, calls `build_notebook()`, and asserts the committed `.ipynb` equals the generator output. If you change the script without regenerating and committing the notebook, this test fails. The `THIN_SYSTEM` anchor string in the generator must stay byte-identical to `persona_rag.generate.persona.THIN_SYSTEM` so training and serving share the same persona prompt.
 
-## 5. Design-decision history
+## 5. Design notes
 
-Specs and reviews under `docs/superpowers/` record why subsystems are shaped the way they are. Read the relevant one before changing a subsystem it covers.
-
-Specs (`docs/superpowers/specs/`):
-
-- `2026-05-22-persona-insights-design.md`
-- `2026-05-22-bot-admin-card-revoke-design.md`
-- `2026-05-26-stage-c-checkpointing-design.md`
-- `2026-05-31-insights-extraction-accuracy-design.md`
-- `2026-05-31-mmr-retrieval-design.md`
-
-Plans (`docs/superpowers/plans/`):
-
-- `2026-05-22-self-insights-pipeline.md`
-- `2026-05-31-insights-extraction-accuracy.md`
-- `2026-05-31-mmr-retrieval.md`
-
-Reviews and summaries (`docs/superpowers/`):
-
-- `2026-05-22-self-insights-pipeline-summary.md`
-- `2026-05-31-architecture-audit.md`
-- `2026-06-01-finetune-architecture-audit.md`
-- `2026-06-01-overnight-persona-upgrade.md`
-- `2026-06-01-second-pass-review.md`
-
-Config comments cite the relevant spec inline (for example, `MMR_*` keys reference `docs/superpowers/specs/2026-05-31-mmr-retrieval-design.md`).
+Design rationale lives next to the code: module docstrings (for example `persona_rag/retrieval/mmr.py` and `persona_rag/insights/verifier.py`) and the deep-dive docs under `docs/` explain why each subsystem is shaped the way it is. Read the relevant doc or docstring before changing a subsystem it covers.

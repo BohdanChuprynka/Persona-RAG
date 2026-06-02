@@ -26,8 +26,8 @@ class TestDetectRegister:
 
     def test_long_help_seeking_is_serious(self) -> None:
         msg = (
-            "дивись останнім часом в мене є така проблема що я знаю що деякі речі "
-            "***REMOVED***, що мені робити??"
+            "слухай, в мене така проблема що я постійно відкладаю важливі справи, "
+            "ніяк не можу зібратись, що мені робити??"
         )
         assert detect_register(msg) == "serious"
 
@@ -35,7 +35,7 @@ class TestDetectRegister:
         assert detect_register("в мене проблема, не можу перестати, що мені робити?") == "serious"
 
     def test_emotional_disclosure_is_serious(self) -> None:
-        assert detect_register("***REMOVED***, не знаю що робити") == "serious"
+        assert detect_register("чесно, я зовсім розгубився, не знаю що робити") == "serious"
 
     def test_heated_beats_serious(self) -> None:
         # an insult wins even if long — fire back, don't counsel

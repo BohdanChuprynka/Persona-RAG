@@ -2,7 +2,7 @@
 
 The self-insights pipeline distills durable, first-person facts about the persona out of the raw chat corpus, then serves a small slice of them into the live bot prompt. It is a batch job (`scripts/distill_insights.py`), separate from the chat path. Output lands in two places: a SQLite `insight_row` table (the full record, including human-reviewable `pending` rows) and a Qdrant `self_insights` collection (the embedded subset the bot retrieves at chat time).
 
-The pipeline runs Stages A through F. Stage A is algorithmic. Stages C, D, and the C-to-D verification gate make LLM calls. The design that hardened extraction accuracy lives in `docs/superpowers/specs/2026-05-31-insights-extraction-accuracy-design.md`; this document consolidates the shipped behavior.
+The pipeline runs Stages A through F. Stage A is algorithmic. Stages C, D, and the C-to-D verification gate make LLM calls. The verification gate that hardened extraction accuracy lives in `persona_rag/insights/verifier.py`; this document consolidates the shipped behavior.
 
 ## Pipeline diagram
 
@@ -196,6 +196,6 @@ Make targets: `make insights` (incremental), `make insights-full` (full), `make 
 | Chat-time retrieval | `persona_rag/graph/nodes/retrieve_insights.py` |
 | Prompt assembly | `persona_rag/generate/prompt.py` |
 | Config knobs | `persona_rag/config.py` |
-| Design spec | `docs/superpowers/specs/2026-05-31-insights-extraction-accuracy-design.md` |
+| Verification gate | `persona_rag/insights/verifier.py` |
 
 The repository carries 72 Python test files under `tests/` covering these modules.

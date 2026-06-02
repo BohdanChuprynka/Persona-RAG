@@ -125,8 +125,7 @@ class RawInsightRow(SQLModel, table=True):
 
     Persisted atomically alongside InsightRunState in each Stage C iteration so
     that a crash anywhere downstream (Stage D, E, F) leaves the extracted raws
-    recoverable on the next incremental run. See
-    docs/superpowers/specs/2026-05-26-stage-c-checkpointing-design.md.
+    recoverable on the next incremental run.
     """
 
     __tablename__ = "raw_insight"

@@ -114,7 +114,7 @@ These apply on the OpenAI path only (the thin LoRA path takes neither).
 `detect_register()` in `persona_rag/generate/register.py` classifies the incoming message as `heated`, `serious`, or `casual`. It is gated by `REGISTER_AWARE_ENABLED` (true).
 
 - **heated** is checked first: a directed insult or aggression aimed at you (substring match against `_HEATED`) fires back even if the message is also long and questiony.
-- **serious** flips on an un-negated distress, help-seeking, or reflective marker (`_SERIOUS`). A marker directly preceded by a standalone `не` is treated as negation and does not flip. The distinction that matters most: `"хуйло, йди нахуй"` (attack on you) is heated, but `"мені хуєво"` (their own pain) is serious. Classification is by who the charged words are about, not their mere presence.
+- **serious** flips on an un-negated distress, help-seeking, or reflective marker (`_SERIOUS`). A marker directly preceded by a standalone `не` is treated as negation and does not flip. The distinction that matters most is the target of the charged words: an insult aimed at you classifies as heated, while charged vocabulary describing the sender's own pain classifies as serious. Classification keys on who the words are about, not their mere presence.
 - **casual** is the default.
 
 `build_messages()` conditions on the register by appending a per-reply `system` directive, which the model obeys more reliably than the soft rules in the template:
