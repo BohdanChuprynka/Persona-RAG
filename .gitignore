@@ -32,6 +32,10 @@ parsed/
 # Model weights (gguf) — large; commit the Modelfile, not the weights
 models/*.gguf
 
+# Eval reports — charts/summary are local review artifacts; human_eval embeds
+# real chat content (privacy). Keep out of git; publish selectively after review.
+reports/
+
 # MLflow local backend
 mlruns/
 mlartifacts/

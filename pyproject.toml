@@ -58,6 +58,10 @@ extend-exclude = ["notebooks"]
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
 
+[tool.ruff.lint.per-file-ignores]
+# Embedded HTML/CSS/JS template literal — line length is not meaningful there.
+"scripts/build_human_eval.py" = ["E501"]
+
 [tool.mypy]
 python_version = "3.12"
 strict = true
