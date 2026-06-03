@@ -18,6 +18,7 @@ async def retrieve(
     language: str | None = None,
     top_k: int | None = None,
     alpha: float | None = None,
+    exclude_ids: set[str] | None = None,
 ) -> list[RetrievedTurn]:
     s = get_settings()
     k = top_k or s.TOP_K
@@ -28,8 +29,10 @@ async def retrieve(
     # when MMR is disabled.
     pool = s.MMR_POOL_SIZE if s.MMR_ENABLED else k * 4
 
-    dense = await retrieve_dense(client, query, top_k=pool, language=language)
-    bm25 = retrieve_bm25(query, top_k=pool)
+    dense = await retrieve_dense(
+        client, query, top_k=pool, language=language, exclude_ids=exclude_ids
+    )
+    bm25 = retrieve_bm25(query, top_k=pool, exclude_ids=exclude_ids)
     fused = fuse_scores(dense, bm25, alpha=alpha, top_k=pool)
     reranked = recency_decay(fused)
 

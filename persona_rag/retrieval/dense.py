@@ -14,6 +14,7 @@ async def retrieve_dense(
     *,
     top_k: int,
     language: str | None = None,
+    exclude_ids: set[str] | None = None,
 ) -> list[RetrievedTurn]:
     vec = (await embed_batch([query]))[0]
     return search_dense(
@@ -22,4 +23,5 @@ async def retrieve_dense(
         vec,
         top_k=top_k,
         language=language,
+        exclude_ids=exclude_ids,
     )

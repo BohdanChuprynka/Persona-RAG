@@ -111,13 +111,23 @@ def search_dense(
     top_k: int,
     language: str | None = None,
     exclude_eval: bool = True,
+    exclude_ids: set[str] | None = None,
 ) -> list[RetrievedTurn]:
     conditions: list[_Condition] = []
     if exclude_eval:
         conditions.append(FieldCondition(key="eval_split", match=MatchValue(value=False)))
     if language:
         conditions.append(FieldCondition(key="language", match=MatchValue(value=language)))
-    flt = Filter(must=conditions) if conditions else None
+    must_not: list[_Condition] = []
+    if exclude_ids:
+        # Persona-turn Qdrant point id IS turn.id, so HasIdCondition drops the
+        # exact gold turn server-side before it can enter the result set.
+        must_not.append(HasIdCondition(has_id=sorted(exclude_ids)))
+    flt = (
+        Filter(must=conditions or None, must_not=must_not or None)
+        if (conditions or must_not)
+        else None
+    )
     response = client.query_points(
         collection_name=collection,
         query=vector,
