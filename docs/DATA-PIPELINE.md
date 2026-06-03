@@ -39,28 +39,28 @@ The diagram below is `docs/diagrams/ingest.mmd`.
 
 ```mermaid
 flowchart LR
-    A1[Telegram result.json] --> P1[parse_telegram_export]
-    A2[Instagram messages JSON] --> P2[walk_instagram_folder]
+    A1["Telegram result.json"] --> P1["parse_telegram_export"]
+    A2["Instagram messages JSON"] --> P2["walk_instagram_folder"]
 
-    P1 --> N[RawMessage<br/>channel, chat_id,<br/>sender_id, text,<br/>timestamp]
+    P1 --> N["RawMessage<br/>channel, chat_id,<br/>sender_id, text,<br/>timestamp"]
     P2 --> N
 
-    N --> R[redact PII<br/>phones, emails,<br/>addresses, names]
-    R --> C[collapse_bursts<br/>+ split_sessions<br/>by chat, time gap]
-    C --> T[extract_persona_turns<br/>your_reply + incoming_context<br/>BLAKE2b hash_id<br/>detect_language]
-    T --> M[mark_eval_split<br/>last 10% by timestamp]
+    N --> R["redact PII<br/>phones, emails,<br/>addresses, names"]
+    R --> C["collapse_bursts<br/>+ split_sessions<br/>by chat, time gap"]
+    C --> T["extract_persona_turns<br/>your_reply + incoming_context<br/>BLAKE2b hash_id<br/>detect_language"]
+    T --> M["mark_eval_split<br/>last 10% by timestamp"]
 
-    M --> E[embed_batch<br/>OpenAI, batch=128]
-    M --> ST[compute_anchors]
-    M --> DB[(SQLite<br/>persona_turns)]
-    M --> BM[BM25 build_bm25<br/>data/bm25.pkl<br/>train split only]
+    M --> E["embed_batch<br/>OpenAI, batch=128"]
+    M --> ST["compute_anchors"]
+    M --> DB[("SQLite<br/>persona_turns")]
+    M --> BM["BM25 build_bm25<br/>data/bm25.pkl<br/>train split only"]
 
-    E --> Q[(Qdrant<br/>persona_turns)]
-    ST --> SA[data/style_anchors.json]
+    E --> Q[("Qdrant<br/>persona_turns")]
+    ST --> SA["data/style_anchors.json"]
 
-    style N fill:#dbeafe
-    style R fill:#fef3c7
-    style E fill:#dcfce7
+    style N fill:#dbeafe,color:#1e3a5f
+    style R fill:#fef3c7,color:#451a03
+    style E fill:#dcfce7,color:#14532d
 ```
 
 ### 1. Parse

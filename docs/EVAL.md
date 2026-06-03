@@ -2,11 +2,11 @@
 
 How to measure whether the bot sounds like the persona. The runner replays held-out turns through the live graph and scores generated replies against the real ones by distribution.
 
-## Why distributional stylometry beats BLEU/ROUGE
+## Why distributional stylometry
 
-BLEU and ROUGE score n-gram overlap against a single reference reply. A persona is a distribution, not one string. Two replies with zero shared words can both be in voice, and a reply that copies the reference n-grams can still be out of voice if its shape is wrong. Overlap metrics reward surface copying and stay blind to shape failures.
+A persona is a distribution, not one string. Two replies with zero shared words can both be in voice, and a reply that reuses a reference reply's exact words can still be out of voice if its shape is wrong. Scoring a generated reply by word overlap with a single reference reply rewards surface copying and stays blind to shape failures, so this eval compares the full distribution of style signals on each side instead.
 
-The concrete failure they miss is shape uniformity. The legacy `persona_rag/eval/stylometry.py` reduces each side to a corpus mean, so a bot that always emits one 45-character bubble scores near zero against a real speaker who alternates between one-word bursts and four-message replies. The mean matches while the distribution is wrong. `persona_rag/eval/distribution.py` exists to make that gap visible by comparing full distributions of message shape, per-bubble length, punctuation, code-switch, and opener choice.
+The concrete failure a single-reference, word-overlap score misses is shape uniformity. The legacy `persona_rag/eval/stylometry.py` reduces each side to a corpus mean, so a bot that always emits one 45-character bubble scores near zero against a real speaker who alternates between one-word bursts and four-message replies. The mean matches while the distribution is wrong. `persona_rag/eval/distribution.py` exists to make that gap visible by comparing full distributions of message shape, per-bubble length, punctuation, code-switch, and opener choice.
 
 ## The runner
 
@@ -59,9 +59,9 @@ flowchart LR
     E --> Q[(Qdrant<br/>persona_turns)]
     ST --> SA[data/style_anchors.json]
 
-    style N fill:#dbeafe
-    style R fill:#fef3c7
-    style E fill:#dcfce7
+    style N fill:#dbeafe,color:#1e3a5f
+    style R fill:#fef3c7,color:#451a03
+    style E fill:#dcfce7,color:#14532d
 ```
 
 ## The metrics

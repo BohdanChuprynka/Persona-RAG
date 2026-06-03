@@ -201,43 +201,37 @@ Grouped by subsystem. Each key shows the default from `config.py` and a one-line
 The diagram below (`docs/diagrams/runtime.mmd`) traces an inbound Telegram message through auth, the token-bucket rate limiter, and into the LangGraph run. Auth gating uses the Telegram identity, the rate limiter reads `MAX_MESSAGES_PER_MINUTE`, and the graph run consumes the retrieval, generation, and insights settings above.
 
 ```mermaid
-sequenceDiagram
-    autonumber
-    actor TG as Telegram (friend)
-    participant DP as aiogram Dispatcher
-    participant CH as chat.on_message
-    participant AU as ensure_user (auth)
-    participant RB as TokenBucket
-    participant DT as debug_trace
-    participant LG as graph.ainvoke
+%% Runtime: per-message request flow (one Telegram message, left to right).
+%% Standard Mermaid flowchart (GitHub-compatible).
+%% Node-level detail of graph.ainvoke is in langgraph-state.mmd (L3 component).
+flowchart LR
+    s1([Telegram message<br/>text, not /command])
+    s2[aiogram Dispatcher<br/>chat.on_message]
+    s3[Auth<br/>ensure_user → state]
+    s4{TokenBucket<br/>rate-limited?}
+    s5(["graph.ainvoke<br/>12-node LangGraph<br/>see L3 node graph"])
+    s6[send_reply<br/>bubbles → Telegram]
+    s7[shadow log<br/>debug_trace]
 
-    TG->>DP: text message (not /command)
-    DP->>CH: route via chat.router
-    CH->>AU: ensure_user(id, username, first_name)
-    AU-->>CH: UserState
+    s1 --> s2 --> s3
+    s3 -->|whitelisted| s4
+    s4 -->|allowed| s5
+    s5 --> s6 --> s7
 
-    alt UNKNOWN
-        CH->>TG: request_admin_approval
-    else PENDING
-        CH->>TG: "Still awaiting approval."
-    else BLOCKED
-        CH-->>DP: return (silent)
-    else WHITELISTED
-        CH->>RB: allow(user_id)
-        alt rate-limited
-            RB-->>CH: False
-            CH->>TG: "Slow down a sec."
-        else allowed
-            RB-->>CH: True
-            CH->>CH: attach_bot(bot)
-            CH->>LG: ainvoke{user_id, chat_id, incoming}
-            Note over LG: see langgraph-state.mmd<br/>(node graph)
-            LG->>TG: send_reply bubbles
-            LG-->>CH: final{retrieved, prompt, reply}
-            CH->>DT: record(incoming, retrieved, prompt, reply)
-            CH->>CH: log message_processed
-        end
-    end
+    eb["Early returns, no graph:<br/>UNKNOWN → ask admin<br/>PENDING → awaiting<br/>BLOCKED → silent"]
+    sb["reply: slow down a sec"]
+    s3 -.->|not whitelisted| eb
+    s4 -.->|rate-limited| sb
+
+    style s1 fill:#fed7aa,stroke:#c2410c,color:#7c2d12
+    style s2 fill:#dbeafe,stroke:#1e40af,color:#1e3a5f
+    style s3 fill:#dbeafe,stroke:#1e40af,color:#1e3a5f
+    style s4 fill:#fef3c7,stroke:#b45309,color:#451a03
+    style s5 fill:#a7f3d0,stroke:#047857,stroke-width:3px,color:#052e16
+    style s6 fill:#dbeafe,stroke:#1e40af,color:#1e3a5f
+    style s7 fill:#a7f3d0,stroke:#047857,color:#052e16
+    style eb fill:#fee2e2,stroke:#dc2626,color:#991b1b
+    style sb fill:#fee2e2,stroke:#dc2626,color:#991b1b
 ```
 
 ## Verifying changes

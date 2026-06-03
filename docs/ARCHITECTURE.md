@@ -18,43 +18,39 @@ Generation defaults to OpenAI `gpt-4o-mini`. Setting `GENERATION_BACKEND=ollama`
 %% C4 Level 1: System Context for Persona-RAG
 %% Standard Mermaid flowchart (renders on GitHub; NOT the C4Context dialect).
 flowchart TD
-    subgraph People[People]
-        Owner[Owner / Admin<br/>ADMIN_TELEGRAM_ID<br/>approves or blocks users, runs admin commands]
-        Chatter[Approved Chatter<br/>whitelisted friend<br/>chats with the persona]
-        Unauth[Unauthorized User<br/>not whitelisted<br/>routed to admin approval]
-        Reviewer[Reviewer<br/>via Streamlit demo UI<br/>pastes messages, inspects replies]
+    subgraph People
+        Owner[Owner / Admin<br/>ADMIN_TELEGRAM_ID]
+        Chatter[Approved Chatter<br/>whitelisted friend]
+        Unauth[Unauthorized User<br/>routed to approval]
+        Reviewer[Reviewer<br/>Streamlit demo UI]
     end
 
-    Core(["<b>Persona-RAG</b><br/>aiogram 3 bot + LangGraph state machine<br/>auth, hybrid retrieval, RAG generation,<br/>guard, per-user memory, shadow log"])
+    Core(["Persona-RAG<br/>aiogram 3 + LangGraph<br/>auth · retrieval · generation<br/>guard · memory · shadow log"])
 
-    subgraph External[External Systems]
-        TG[Telegram Bot API<br/>optional / one surface]
-        OpenAI[OpenAI API<br/>required default]
-        Ollama[Ollama<br/>optional local LoRA backend]
-        Colab[Google Colab + Drive<br/>optional LoRA training]
+    subgraph External["External Systems"]
+        TG[Telegram Bot API]
+        OpenAI[OpenAI<br/>gpt-4o-mini · embeddings]
+        Ollama[Ollama<br/>optional local LoRA]
+        Colab[Colab + Drive<br/>optional training]
         LangSmith[LangSmith<br/>optional tracing]
     end
 
-    %% People -> System
-    Owner -->|approve / block via DM,<br/>admin commands| Core
-    Chatter -->|DMs the bot| Core
-    Unauth -->|first DM triggers<br/>approval flow| Core
-    Reviewer -->|paste message,<br/>localhost:8501| Core
+    Owner -->|admin commands| Core
+    Chatter -->|DMs| Core
+    Unauth -->|first DM| Core
+    Reviewer -->|paste msg| Core
 
-    %% System <-> External
-    Core <-->|receive updates,<br/>send replies via TELEGRAM_BOT_TOKEN| TG
-    Core <-->|embeddings text-embedding-3-small,<br/>chat gpt-4o-mini + prompt caching| OpenAI
-    Core <-->|chat completions vs served LoRA<br/>when GENERATION_BACKEND=ollama| Ollama
-    Colab -.->|trains adapter, exports<br/>GGUF/Modelfile for Ollama| Ollama
-    Core -.->|per-node run traces<br/>when LANGCHAIN_TRACING_V2| LangSmith
+    Core <-->|send / receive| TG
+    Core <-->|chat + embeddings| OpenAI
+    Core <-->|served LoRA| Ollama
+    Colab -.->|exports GGUF| Ollama
+    Core -.->|traces| LangSmith
 
     classDef person fill:#dbeafe,stroke:#1e40af,color:#0b1f4d;
-    classDef system fill:#dcfce7,stroke:#15803d,color:#052e16;
     classDef ext fill:#fef3c7,stroke:#b45309,color:#451a03;
-
     class Owner,Chatter,Unauth,Reviewer person;
-    class Core system;
     class TG,OpenAI,Ollama,Colab,LangSmith ext;
+    style Core fill:#a7f3d0,stroke:#047857,stroke-width:3px,color:#052e16
 ```
 
 ## C4 model
@@ -68,55 +64,57 @@ The L1 diagram above sets the boundary. Telegram is one surface (the Streamlit d
 Inside the boundary, the bot service (`persona_rag/bot`) receives Telegram updates and invokes the compiled graph once per turn. The same graph backs the Streamlit demo. Two batch pipelines (ingest and insights) write the stores. Eval and fine-tune run offline.
 
 ```mermaid
-%% C4 Level 2: Container diagram for Persona-RAG
-%% Rendered as a standard Mermaid flowchart (GitHub-compatible).
-flowchart TB
+%% C4 Level 2: Container diagram for Persona-RAG (runtime containers).
+%% Standard Mermaid flowchart (GitHub-compatible). Left-to-right layers.
+%% Every node pins an explicit text color so it stays readable on GitHub's
+%% light AND dark themes. Offline batch pipelines have their own diagrams
+%% (see DATA-PIPELINE.md and INSIGHTS.md).
+flowchart LR
     user([Telegram User])
-    tg[["Telegram Bot API<br/>(external)"]]
-    openai[["OpenAI API<br/>chat + embeddings"]]
-    ollama[["Ollama<br/>local LoRA (bohdan)"]]
+    reviewer([Reviewer])
 
-    subgraph PRAG["Persona-RAG"]
+    subgraph surface["Surface"]
         direction TB
-
-        bot["Bot Service<br/>[aiogram] handlers + DI"]
-        engine["LangGraph Engine<br/>[langgraph] compiled state machine<br/>auth → retrieve → build_prompt → chat → guardrails → send"]
-        demo["Streamlit Demo UI<br/>[streamlit] :8501"]
-
-        qdrant[("Qdrant<br/>[vector DB] :6333<br/>chat turns + insights")]
-        sqlite[("SQLite Store<br/>[sqlmodel] sessions, memory, whitelist")]
-        mlflow["MLflow<br/>[mlflow] :5001 tracking + artifacts"]
-
-        ingest["Ingest Pipeline<br/>scripts/ingest.py"]
-        insights["Insights Pipeline<br/>scripts/distill_insights.py"]
-        evalft["Eval + Fine-tune<br/>scripts/eval_persona.py + Colab LoRA"]
+        tg["Telegram Bot API"]
+        bot["Bot Service<br/>aiogram + DI"]
+        demo["Streamlit UI<br/>:8501"]
     end
 
-    %% Runtime request path
-    user -->|message| tg
-    tg -->|update| bot
-    bot -->|invoke per turn| engine
-    engine -->|hybrid + insight retrieval| qdrant
-    engine -->|sessions / persona memory| sqlite
-    engine -->|generate reply| openai
-    engine -->|generate reply, --local| ollama
-    engine -->|reply text| bot
-    bot -->|sendMessage| tg
-    tg -->|reply| user
+    engine(["LangGraph Engine<br/>compiled state machine<br/>auth · retrieve · prompt<br/>chat · guard · send"])
 
-    %% Demo UI shares the engine
-    demo -->|invoke| engine
+    subgraph data["Data + Models"]
+        direction TB
+        openai["OpenAI<br/>chat + embeddings"]
+        ollama["Ollama<br/>local LoRA"]
+        qdrant[("Qdrant<br/>turns + insights")]
+        sqlite[("SQLite<br/>sessions · memory")]
+        mlflow["MLflow<br/>:5001 tracking"]
+    end
 
-    %% Batch pipelines write the stores
-    ingest -->|embed + upsert turns| qdrant
-    ingest -->|seed metadata| sqlite
-    insights -->|distill + upsert insights| qdrant
-    insights -->|read source turns| sqlite
+    user --> tg
+    tg --> bot
+    reviewer --> demo
+    bot --> engine
+    demo --> engine
+    engine --> openai
+    engine -.-> ollama
+    engine --> qdrant
+    engine --> sqlite
+    engine -.-> mlflow
 
-    %% Observability + offline eval
-    engine -.->|metrics / shadow logs| mlflow
-    evalft -.->|log scores| mlflow
-    evalft -->|score replies| openai
+    classDef client fill:#eef2ff,stroke:#475569,color:#1e293b;
+    classDef surf fill:#dbeafe,stroke:#1e40af,color:#1e3a5f;
+    classDef eng fill:#a7f3d0,stroke:#047857,stroke-width:3px,color:#052e16;
+    classDef store fill:#dbeafe,stroke:#1e40af,color:#1e3a5f;
+    classDef model fill:#fef3c7,stroke:#b45309,color:#451a03;
+    classDef obs fill:#ede9fe,stroke:#6d28d9,color:#4c1d95;
+
+    class user,reviewer client;
+    class tg,bot,demo surf;
+    class engine eng;
+    class qdrant,sqlite store;
+    class openai,ollama model;
+    class mlflow obs;
 ```
 
 Container reference:
@@ -172,16 +170,14 @@ For the depth treatment of each node (inputs, outputs, latency, failure handling
 
 ## Why RAG, not SFT
 
-The predecessor project (`PersonaGPT`) attempted supervised fine-tuning of small open LLMs (Mistral-7B-Ukrainian, then DeepSeek-R1-Distill-Qwen-1.5B) on Q/A pairs extracted from chat history. Ranked failure modes:
+Fine-tuning a small open LLM on chat history is the obvious alternative to retrieval. For persona transfer it runs into structural problems:
 
-1. **Augmentation destroyed the persona.** Back-translation, synonym swap, and word shuffle erase exactly what the system wants to preserve: phrasing, slang, capitalization, emoji density.
-2. **Reasoning-model base.** DeepSeek-R1-Distill emits `<think>...</think>` before answering. Fine-tuning did not override the template.
-3. **Loss mis-targeted.** `labels = outputs.input_ids` plus `DataCollatorForLanguageModeling` computed loss over the prompt as well as the reply.
-4. **Conversation model wrong.** A strict odd-row-question / even-row-answer alternation was forced. Real chats are not turn-based, so the rule discarded or warped half the signal.
-5. **LoRA undersized.** `r=8` with default `target_modules` touches `q_proj, v_proj` only.
-6. **Eval wrong.** BLEU and ROUGE measure n-gram overlap with a single reference. Persona is a distribution.
+1. **Augmentation destroys the persona.** The usual ways to grow a small fine-tune set (back-translation, synonym swap, word shuffle) erase exactly what the system wants to preserve: phrasing, slang, capitalization, emoji density.
+2. **Chat history is not clean Q/A.** Real conversations are not strict question-then-answer turns. Forcing them into that mold to build training pairs discards or warps a large share of the signal. Retrieval uses the real `incoming_context -> your_reply` pairs as they actually occurred.
+3. **Persona is a distribution, not a target string.** Training to minimize token loss against one "correct" reply optimizes for a single string, and word-overlap scoring cannot see voice (see [`EVAL.md`](EVAL.md)). The objective that matters is matching the distribution of how the speaker writes, which retrieval feeds straight into the prompt.
+4. **Owning weights costs a pipeline.** A trained model needs the data volume, training loop, and eval rigor that retrieval gets for free from a strong base model.
 
-RAG sidesteps all six. The trade-off is dependence on a strong base model (OpenAI by default) rather than owning weights. The local LoRA backend below reopens the owned-weights path without re-introducing these failure modes, because the adapter trains and serves on the same thin shape and the distributional eval in [`EVAL.md`](EVAL.md) replaces BLEU/ROUGE.
+RAG sidesteps these. The trade-off is dependence on a strong base model (OpenAI by default) rather than owned weights. The optional local LoRA backend below reopens the owned-weights path without re-introducing the traps above, because the adapter trains and serves on the same thin shape and the distributional eval in [`EVAL.md`](EVAL.md) measures voice as a distribution.
 
 ## Runtime backend swap
 

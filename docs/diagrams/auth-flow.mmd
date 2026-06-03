@@ -6,9 +6,6 @@ stateDiagram-v2
     PENDING --> WHITELISTED : admin taps Approve<br/>approve_user
     PENDING --> BLOCKED : admin taps Block<br/>block_user
 
-    WHITELISTED --> [*] : normal reply flow
-    BLOCKED --> [*] : silenced
-
     note right of PENDING
         buffer_pending_message
         stores msgs in PendingMessage
@@ -16,12 +13,13 @@ stateDiagram-v2
         You'll hear back soon."
         Admin DM has inline keyboard:
         approve:&lt;id&gt; / block:&lt;id&gt;
-    end note
+end note
 
     note right of WHITELISTED
         approve_user sets WHITELISTED
         Reply: "Authorized. I'm online."
         Logs AuditLog action=approve
+        Then: normal reply flow
     end note
 
     note right of BLOCKED
