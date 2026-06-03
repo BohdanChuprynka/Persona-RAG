@@ -25,7 +25,6 @@
   node("local", (8.2, 3.7), [*local path* — llama-server (llama.cpp)\ Qwen2.5-3B LoRA · GGUF q5\_k\_m\ thin prompt], fill: rgb("#dcfce7"), w: 4.8cm)
   arr((rel: (-2.5, 0), to: "pipe.south"), "api.north")
   arr((rel: (3.2, 0), to: "pipe.south"), "local.north")
-  content((5.0, 4.6), text(6.5pt, fill: rgb("#475569"))[generate])
 
   // retrieval stores feed the API path only
   node("stores", (2.5, 1.7), [Retrieval stores\ Qdrant · BM25 · SQLite · style\_anchors.json], fill: rgb("#f1f5f9"), w: 5.0cm)
