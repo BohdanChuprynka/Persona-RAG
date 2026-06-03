@@ -30,5 +30,5 @@
 
   // the leak the guard fixes — fed by the temporal index
   node("leak", (5.3, 0.7), [retrieval can return the held-out *gold reply* → *28% leak*, removed per-item by the guard], fill: rgb("#fee2e2"), w: 6.0cm, size: 7pt)
-  arr("idxA.south", "leak.west")
+  arr("idxA.south", (rel: (-2.7, 0), to: "leak.north"))
 })
