@@ -72,7 +72,8 @@ variety, at zero cost.
 #figure(
   image("../fig/f3_armA_headline.png", width: 88%),
   caption: [Arm A headline distances. Even fully equipped, the API only reaches a
-  tie on shape and stays behind on length.],
+  tie on shape and trails on the length _distribution_ (per-message, length is a tie
+  too; §3.6).],
 ) <fig-armA-h>
 
 == What the machinery buys
@@ -98,19 +99,19 @@ Is the API's perfect no-`!` an artifact of the hard-coded logit bias? Re-running
 A with the levers off shows it is mostly _earned_ by the prompt: the exclamation
 rate falls from 0.651 (bare) to 0.033 (rich prompt, no bias), and the shipped bias
 supplies only the final nudge to 0.000 (@fig-steered). Everything else is
-lever-insensitive, and the length verdict is unchanged with the levers off
+lever-insensitive, and the length-distribution delta is unchanged with the levers off
 (Δ 4.27, CI (2.51, 5.07)). The levers move the tic, not the verdict.
 
 #figure(
   image("../fig/f5_steered_vs_learned.png", width: 88%),
   caption: [Steered vs. learned (Arm A). The logit bias only finishes a job the rich
-  prompt mostly does; the length delta favors the LoRA either way.],
+  prompt mostly does; the length-distribution delta favors the LoRA either way.],
 ) <fig-steered>
 
 == Per-language
 
 The verdict is essentially the Cyrillic result, where 87% of the data lives: there
-the LoRA clearly wins length (@fig-lang). On the small English slice ($n = 27$) it
+the LoRA clearly leads on the length _distribution_ (@fig-lang). On the small English slice ($n = 27$) it
 is a tie with wide intervals — and, separately, _both_ backends are markedly worse
 in English than in Cyrillic. That is a shared weakness on a minority register, not a
 differentiator, and is reported as low-confidence given the sample.

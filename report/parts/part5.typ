@@ -17,10 +17,11 @@ human win-rate — is unresolved (recall bias; no outside raters). Stated cleanl
 _the fine-tune beats the bare model on voice outright, matches the shipped product on
 voice, and wins decisively on cost, privacy, and offline operation._ These are surface
 metrics, not a certified _feels-like-me_ — but on the dimensions we can actually
-measure the conclusion is not in doubt: the local fine-tune is the better replica of
-the texting register, at zero cost. The only thing left unresolved is the subjective
-human seal, and for the reasons below it may stay that way — which is a limitation on
-the validation, not a hole in the metric verdict. The headline reading of the study:
+measure the conclusion is not in doubt: the local fine-tune is at least the equal of
+the shipped product on the measured register, and — once \$0 cost, privacy, and offline
+operation are counted — the better overall replica. The only thing left unresolved is
+the subjective human seal, and for the reasons below it may stay that way — a
+limitation on the validation, not a hole in the metric verdict. The headline reading of the study:
 _an elaborate production stack serves mainly to reach a tie with where a small local
 fine-tune already sits — and the residual differences are deployment, not voice._
 

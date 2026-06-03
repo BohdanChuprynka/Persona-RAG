@@ -3,8 +3,9 @@
 Beating the baseline is the relative question. The harder, more interesting one is
 absolute: not "is the fine-tune better than the API", but "is it good enough to pass
 for the person themselves?" This is where automatic metrics run out — only a human
-can answer it — and where the strongest possible judge is available: the person
-whose voice is being cloned.
+can answer it — and where the strongest possible judge exists _in principle_: the
+person whose voice is being cloned, though, as below, that judge turns out to be
+confounded in practice.
 
 #let pending(body) = rect(
   width: 78%,
@@ -14,7 +15,7 @@ whose voice is being cloned.
   stroke: (paint: rgb("#94a3b8"), dash: "dashed"),
 )[#align(center)[#text(9pt, style: "italic", fill: rgb("#475569"))[#body]]]
 
-== The human verdict, and why it is not the primary here
+== The human verdict, and why it can't be resolved here
 
 The pre-registered design names a blind human win-rate as the _primary_ verdict — a
 forced choice over anonymized pairs ("which is more like something you'd send?"),

@@ -88,7 +88,7 @@ The aggregate verdict is essentially the **cyrillic** result (87% of the hold-ou
 - **Corpus-level, not within-item.** Arm A and arm B score the same hold-out *distribution* but not byte-identical item sets (arm B shuffles a no-id ShareGPT file; arm A loads id-bearing DB rows). Cross-arm deltas are aggregate, not paired. (Within-item alignment was deferred as a fragile nice-to-have.)
 - **Runtime-faithful query.** Retrieval + register/shape use `ctx[-1]` only (what the live bot sends, `chat.py:51`), with `ctx[:-1]` as session — not the joined context. Both arms replay the same `(incoming, session)`; each prompt builder consumes it as it really does.
 - **Replay gaps (logged in `results.params`):** `user_memory=""` (first-contact), `session` reconstructed from the item's own context, insights from time-of-run tables, `style_anchors.json` shared with prod.
-- **The human panel is the real verdict** for both arms.
+- **The human channel is the pre-registered primary check, but it is UNRESOLVED here** (see §4): the lone available rater is recall-biased and privacy bars outside raters, so it is a weak/confounded corroborator, not the decisive verdict. The automatic arms (B + A) carry the decision.
 
 ## 8. Reproduce
 
