@@ -36,12 +36,18 @@
     intervals under a pre-registered acceptance rule. A controlled arm isolates the
     weights; a production arm pits the full API stack against the thin fine-tune, with
     a per-item retrieval guard that removes a measured 28% gold-answer leak. On a level
-    field the fine-tune wins reply length decisively (Cliff's δ = 0.95) and matches the
-    no-"!" register; fully equipped, the production machinery only claws the API back
-    to parity — at \$0.37 per thousand replies and an \~11× token tax against \$0
-    local. A blind human read concurs: the API is trivially discriminable. Three
-    independent methods agree the fine-tune ships; the open frontier is whether the
-    owner can tell it from himself.]
+    field the fine-tune is decisively closer on reply length (Cliff's δ = 0.95, closer
+    on 292 of 299 messages) and matches the no-"!" register; fully equipped, the
+    production machinery only pulls the API back to a _voice tie_ — at \$0.37 per
+    thousand replies and an \~11× token tax against \$0 local — which cost, privacy, and
+    offline capability break toward the local model. On the dimensions we can measure,
+    then, the conclusion is clear: the local fine-tune is at least the equal of the
+    fully-equipped product and decisively beats the bare model — the better replica of
+    the register, at zero cost. What these surface metrics cannot certify is the
+    subjective "feels like me"; that pre-registered _primary_ check (a blind human
+    win-rate) is unresolved here, because the only rater with standing (the author) is
+    recall-biased and privacy precludes outside raters — a real limitation, not a gap
+    in the metric verdict.]
   ]
 ]
 

@@ -7,15 +7,15 @@ fixed, the harness, and the acceptance rule fixed _before_ the results.
 == Measuring a voice
 
 No single number captures "sounds like the person", so the evaluation uses a small
-vector of surface metrics, each targeting one fingerprint from @fig-d1. The two
-headline distances compare _distributions_ against the real held-out replies:
+vector of surface metrics, each targeting one of the voice fingerprints from Part I.
+The two headline distances compare _distributions_ against the real held-out replies:
 
 - *Message shape* ($"shape"_"JS"$): the Jensen-Shannon divergence between the
   generated and real distributions of bubble-count per reply (how many separate
   messages a reply is split into). Bounded to $[0, 1]$; lower is closer. It catches
   a constant-3-bubble mode collapse that a mean would score as perfect.
-- *Reply length* ($W_1$): the 1-Wasserstein (earth-mover) distance between the
-  per-bubble character-length distributions, in characters. Lower is closer.
+- *Reply length* ($W_1$): the 1-Wasserstein (earth-mover) distance @rubner2000emd
+  between the per-bubble character-length distributions, in characters. Lower is closer.
 
 Alongside these run a set of register rates: the exclamation rate, the `)` smiley
 rate (detected by unbalanced close-parens so real parentheticals do not
@@ -71,10 +71,13 @@ The production arm has its own contamination risk: because the held-out gold tur
 sit in the very corpus the API retrieves from, retrieval can hand the model the
 exact answer key for the item being scored. Measured directly, with exclusion
 disabled, *28% of items (17 of 60)* retrieved their own gold reply into the
-few-shot pool. A per-item guard excludes the scored turn's id from retrieval,
-driving that to *zero* — while leaving the mean top-1 similarity essentially
-unchanged (0.386 vs. 0.389), which confirms the guard removes contamination rather
-than retrieval quality (@fig-leak).
+few-shot pool. A per-item guard excludes the scored turn's id from retrieval, driving
+the *exact answer-key* — the gold turn by id, and its verbatim text under the same
+context — to *zero*, while leaving the mean top-1 similarity essentially unchanged
+(0.386 vs. 0.389): the guard removes contamination, not retrieval quality
+(@fig-leak). It is an exact-match guard, so a near-paraphrase under a different id
+could in principle slip through; here no retrieved neighbour exceeded 0.9 similarity,
+but that residual near-duplicate risk is named among the limitations.
 
 #figure(
   image("../fig/f1_leak_guard.png", width: 72%),

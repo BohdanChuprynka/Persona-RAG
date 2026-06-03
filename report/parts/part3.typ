@@ -22,8 +22,8 @@ result replicates across two seeds (@tab-armB, @fig-armB).
     table.hline(stroke: 0.4pt),
     [`shape_js`], [0.052], [0.024], [+0.028 (-0.014, 0.073)], [tie],
     [`len_wasserstein`], [128.8], [*2.9*], [+125.9 (107.6, 142.4)], [*LoRA*],
-    [`exclaim_rate`], [0.651], [0.000], [—], [LoRA],
-    [`opener_entropy` (↑)], [5.02], [5.77], [—], [LoRA],
+    [`exclaim_rate`], [0.651], [0.000], [—], [descr.],
+    [`opener_entropy` (↑)], [5.02], [5.77], [—], [descr.],
     [cost / 1k replies], [\$0.082], [*\$0*], [—], [LoRA],
     table.hline(),
   ),
@@ -55,16 +55,18 @@ variety, at zero cost.
     table.header([metric (↓ closer)], [API], [LoRA], [Δ (95% CI)], [verdict]),
     table.hline(stroke: 0.4pt),
     [`shape_js`], [0.0353], [0.0339], [+0.001 (-0.040, 0.040)], [tie],
-    [`len_wasserstein`], [6.97], [*3.41*], [+3.57 (1.53, 4.66)], [*LoRA*],
+    [`len_wasserstein`], [6.97], [3.41], [+3.57 (1.53, 4.66)], [distrib.#super[†]],
     [`exclaim_rate`], [0.000], [0.000], [—], [tie],
-    [`opener_entropy` (↑)], [3.70], [5.76], [—], [LoRA],
+    [`opener_entropy` (↑)], [3.70], [5.76], [—], [descr.],
     [cost / 1k replies], [\$0.37], [*\$0*], [—], [LoRA],
     [p50 latency], [0.96s], [1.01s], [—], [\~tie],
     table.hline(),
   ),
-  caption: [Arm A (production), $n = 300$, with the leak guard active
-  (`id_leaks` = 0). The shipped machinery ties the LoRA on shape and `!` but does
-  not pass it on length.],
+  caption: [Arm A (production), $n = 300$, leak guard active (`id_leaks` = 0). The
+  shipped machinery ties the LoRA on shape and `!`. #super[†]On reply length the LoRA
+  leads in _distribution_ (the corpus Wasserstein CI excludes zero), but _per
+  individual message_ the effect is negligible (Cliff's δ = 0.04 — a tie; §3.6).
+  Tic rows are descriptive (no CI / multiple-comparison correction).],
 ) <tab-armA>
 
 #figure(
@@ -116,17 +118,20 @@ differentiator, and is reported as low-confidence given the sample.
 #figure(
   image("../fig/f6_by_language.png", width: 92%),
   caption: [Per-language fidelity (Arm A). Cyrillic ($n = 261$) drives the verdict;
-  English ($n = 27$) is a tie and a shared weakness for both backends.],
+  English ($n = 27$) is a tie and a shared weakness for both backends. The remaining
+  \~12 mixed-script items fall below the per-language reporting threshold.],
 ) <fig-lang>
 
 == Effect size: how big, and how consistent
 
 A corpus-level distance with a CI does not say how _consistent_ an advantage is
-across individual messages. A per-item effect size does, and it splits the two arms
-sharply — which is itself informative. On Arm B the per-item length-error effect is
-overwhelming: *Cliff's δ = 0.949 (large)*, with the LoRA closer on *292 of 299*
-decisive items (sign-test $p approx 8 times 10^(-77)$). On Arm A it is *negligible*:
-*δ = 0.043*, the LoRA closer on just 147 of 293 — a per-item coin-flip.
+across individual messages. A per-item effect size does (Cliff's δ @cliff1993), and it
+splits the two arms sharply — which is itself informative. On Arm B the per-item
+length-error effect is overwhelming: *δ = 0.949 (large)*, with the LoRA closer on
+*292 of 299* decisive items (sign-test $p approx 8 times 10^(-77)$; Wilcoxon
+signed-rank $z = 14.9$). On Arm A it is *negligible*: *δ = 0.043*, the LoRA closer on
+just 147 of 293 — a per-item coin-flip (sign-test $p = 1.0$, Wilcoxon $p = 0.54$, both
+confirming the wash).
 
 This is not a contradiction. Arm A's LoRA length advantage is _distributional_ (the
 corpus earth-mover CI still excludes zero), but per _individual message_ the
@@ -146,12 +151,15 @@ the underpowered $n = 60$ leak-ablation arms straddle zero, as expected.
 
 == Not memorization
 
-Could the fine-tune simply be parroting training lines? No: its copy / near-copy
-rate (0.103) sits just above the measured _natural floor_ — the rate at which the
-person's own held-out replies coincide with their past replies (0.070) — because
-short casual texts recur for anyone (@fig-copy). The API, writing novel prose,
-sits near zero. The fine-tune's fidelity is not bought by memorization beyond the
-rate a real person repeats themselves.
+Could the fine-tune simply be parroting training lines? The evidence says no, with a
+caveat. Its copy / near-copy rate (0.103) sits near the measured _natural floor_ — the
+rate at which the person's own held-out replies coincide with their past replies
+(0.070) — because short casual texts recur for anyone (@fig-copy); the API, writing
+novel prose, sits near zero. Two honest qualifiers: the detector is a _capped_ proxy,
+so 0.103 is a lower bound, and neither rate carries a CI, so the \~3-point gap above
+the floor is not formally tested. Read conservatively, the fine-tune reuses text at
+roughly the rate a real person repeats themselves — not the signature of memorization,
+but not proven flush with the floor either.
 
 #figure(
   image("../fig/f9_copy_floor.png", width: 70%),
@@ -170,5 +178,6 @@ call and the retrieval leak surface the guard exists to close.
 #figure(
   image("../fig/f8_operational.png", width: 96%),
   caption: [Operational profile (Arm A). The LoRA is free and lean; the API pays a
-  \~11× input-token tax and a per-call fee to reach the fine-tune's fidelity.],
+  \~11× input-token tax and a per-call fee to reach parity on shape and the `!`
+  register.],
 ) <fig-ops>

@@ -33,6 +33,6 @@
   content((8.3, 1.95), text(6.5pt, fill: rgb("#15803d"))[train ≈ eval ≈ 0.18 Latin — honest, reachable target])
 
   // the leak the guard fixes
-  box((2.7, 0.85), (5.2, 0.75), [retrieval can return the held-out *gold reply* →\ *28% leak*, removed per-item (Fig. 1)], fill: rgb("#fee2e2"))
+  box((2.7, 0.85), (5.2, 0.75), [retrieval can return the held-out *gold reply* →\ *28% leak*, removed per-item by the guard], fill: rgb("#fee2e2"))
   arr((2.7, 2.35), (2.7, 1.25))
 })

@@ -2,17 +2,27 @@
 
 == The verdict
 
-Under the rule fixed in advance, *the fine-tune ships*. The evidence converges from
-three independent directions. In the controlled arm it is decisively closer to the
-person's reply length and matches the no-`!` rule exactly, with shape a tie. In the
-production arm the API's full machinery only claws back to _parity_ — tying on shape
-and `!`, still behind on the length distribution and opener variety — while the
-fine-tune delivers the same fidelity at zero marginal cost, no per-message
-phone-home, and no retrieval-leak surface. And rated by eye, the API is trivially
-discriminable, so the fine-tune wins voice outright. A voice win-or-tie that is also
-cheaper, local, offline, and leak-free breaks the decision toward the fine-tune on
-every count. The headline reading of the whole study: _an elaborate production stack
-serves mainly to reach where a small local fine-tune already sits._
+Under the rule fixed in advance, the decision favors the fine-tune — but the strength
+of the claim differs sharply by arm, and it is worth being precise. On a level field
+(Arm B) the fine-tune is decisively closer to the person's reply length — a large,
+per-item-consistent effect — and matches the no-`!` register, with shape a tie: a
+genuine voice win over the bare model. In the shipped configuration (Arm A), the
+API's full machinery pulls it to a _voice tie_ on the automatic metrics — shape, the
+`!` register, and, per individual message, reply length are all statistical ties (the
+fine-tune keeps only a distributional length edge and more varied openers, the latter
+uncorrected for multiple comparisons). The shipped-arm decision is therefore not a
+demonstrated voice advantage; it is a tie that cost, privacy, and offline capability
+break toward the local model. And the pre-registered _primary_ channel — an unbiased
+human win-rate — is unresolved (recall bias; no outside raters). Stated cleanly:
+_the fine-tune beats the bare model on voice outright, matches the shipped product on
+voice, and wins decisively on cost, privacy, and offline operation._ These are surface
+metrics, not a certified _feels-like-me_ — but on the dimensions we can actually
+measure the conclusion is not in doubt: the local fine-tune is the better replica of
+the texting register, at zero cost. The only thing left unresolved is the subjective
+human seal, and for the reasons below it may stay that way — which is a limitation on
+the validation, not a hole in the metric verdict. The headline reading of the study:
+_an elaborate production stack serves mainly to reach a tie with where a small local
+fine-tune already sits — and the residual differences are deployment, not voice._
 
 == Threats to validity
 
@@ -22,17 +32,27 @@ The result is honest only with its limits stated plainly.
   "feels like the person" directly. The blind human panel is the only direct
   measure, and the metric↔human agreement that would validate the proxies is pending
   the panel's rating.
-- *Single rater.* The human verdict comes from one judge — the owner. No inter-rater
-  agreement is computable at $n = 1$ rater. This is defensible (the construct is the
-  owner's own voice, and he is its ground-truth authority) but it is a limitation;
-  recruiting raters who know his style is the path to a paper-grade claim.
-- *Single decode per item* at temperature 0.8. The bootstrap intervals capture
-  which-items sampling noise, not decode stochasticity; a greedy or multi-seed
-  re-run would bound it.
+- *The human channel is doubly blocked, so the primary verdict is unresolved.* The
+  only rater with standing is the owner, and he is _recall-biased_: he recognizes his
+  own messages, so his ability to tell model from real conflates memory with voice.
+  Recruiting unbiased raters is precluded by the private content of the corpus. So the
+  pre-registered primary statistic (the human win-rate) is not merely unrated but
+  hard to establish cleanly at all — a real limitation, not a to-do. The automatic
+  arms carry the decision; the human read is a confounded corroborator.
+- *Single decode per item* at temperature 0.8 — and this is load-bearing for Arm A,
+  not a minor caveat. The bootstrap intervals resample item indices only, so they
+  capture which-items sampling noise but not decode stochasticity. The Arm-A length
+  gap is 3.6 characters: its CI excludes zero, but that gap is small enough to sit
+  within plausible re-decode noise, and nothing here shows it survives a re-decode. A
+  greedy or multi-seed pass would bound it; Arm B's 126-character gap is not at risk.
 - *Leakage residual.* The legacy \~90% split-mismatch leak was found and fixed, both
   arms now score the recipient-stratified disjoint split, and the production arm runs
-  the proven per-item retrieval guard. A fully leak-free _claim_ at paper grade would
-  still want the fine-tune re-trained on the exact unified split.
+  a per-item retrieval guard. But that guard is _exact-match_ — it removes the gold
+  turn by id and verbatim same-context text only; a near-paraphrase under a different
+  id, or a thread-adjacent turn sharing the incoming context, is not caught and sits
+  below the top-similarity flag. So "removes the exact answer-key" is exact; "leak-free"
+  is not — the residual near-duplicate rate is unmeasured, and a paper-grade claim
+  would add a similarity-based guard and re-train on the exact unified split.
 - *External validity.* The hold-out is 87% Cyrillic and one person's chat history
   (\~300 held-out turns); the aggregate verdict is essentially the Cyrillic result,
   English is low-$n$, and both backends degrade there. Claims are about this persona,
@@ -47,10 +67,13 @@ The result is honest only with its limits stated plainly.
   reconstructed from each item's own context, insights from time-of-run tables, the
   runtime `ctx[-1]` query) is a faithful reconstruction of live serving, not the live
   system itself.
-- *Multiple comparisons & provenance.* The verdict rests on one pre-registered
-  primary plus a small headline set, with the tic panel descriptive. And the adapter,
-  quantization, and `llama.cpp` build hash are not pinned in the run record (MLflow
-  logging is wired but uncalled) — a minor reproducibility gap to close.
+- *Multiple comparisons & provenance.* About a dozen metrics are reported. The two
+  headline distances carry bootstrap CIs, but the tic metrics (exclamation rate,
+  opener entropy) are *descriptive only* — they were _not_ given a Holm-Bonferroni
+  correction, so where they point toward the fine-tune they should be read as
+  directional, not as tested wins. And the adapter, quantization, and `llama.cpp`
+  build hash are not pinned in the run record (MLflow logging is wired but uncalled) —
+  a reproducibility gap on the local-model numbers.
 
 == Conclusion and future work
 
