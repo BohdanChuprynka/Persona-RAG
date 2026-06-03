@@ -22,8 +22,8 @@
   arr("gguf.south", "serve.north")
 
   // the THIN_SYSTEM invariant: one string fed byte-identically into BOTH train and serve
-  node("thin", (3.7, 3.0), [*`THIN_SYSTEM`* — one Ukrainian persona anchor,\ the byte-identical string used in BOTH train and serve], fill: rgb("#fef9c3"), w: 5.5cm, size: 7pt)
+  node("thin", (2.0, 3.0), [*`THIN_SYSTEM`* — one Ukrainian persona anchor,\ the byte-identical string used in BOTH train and serve], fill: rgb("#fef9c3"), w: 5.5cm, size: 7pt)
   darr("thin.north", "train.south")
   darr("thin.east", "serve.west")
-  content((3.7, 2.0), text(6.8pt, fill: rgb("#b45309"))[train == serve invariant])
+  content((2.0, 2.0), text(6.8pt, fill: rgb("#b45309"))[train == serve invariant])
 })
