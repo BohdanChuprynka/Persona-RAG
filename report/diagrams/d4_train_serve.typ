@@ -7,8 +7,8 @@
     let inner = if w == auto { text(size, body) } else { box(width: w, align(center, text(size, body))) }
     content(pos, inner, frame: "rect", fill: fill, stroke: stroke, padding: 6pt, name: name)
   }
-  let arr(a, b) = line(a, b, mark: (end: ">"), stroke: stroke)
-  let darr(a, b) = line(a, b, mark: (end: ">"), stroke: (paint: rgb("#b45309"), dash: "dashed", thickness: 0.7pt))
+  let arr(a, b) = line(a, b, mark: (end: ">", scale: 0.6, fill: rgb("#475569")), stroke: stroke)
+  let darr(a, b) = line(a, b, mark: (end: ">", scale: 0.6, fill: rgb("#b45309")), stroke: (paint: rgb("#b45309"), dash: "dashed", thickness: 0.7pt))
 
   // train (left) -> merge -> local quantize, then down to GGUF -> serve (right)
   node("train", (2.0, 6.0), [*train* (Colab T4)\ Qwen2.5-3B · 4-bit\ QLoRA r=32 / α=64\ train\_on\_responses\_only], fill: rgb("#dcfce7"))
