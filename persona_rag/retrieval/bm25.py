@@ -11,13 +11,19 @@ from persona_rag.index.bm25_store import load, score_bm25
 from persona_rag.models import PersonaTurn, RetrievedTurn
 
 
-def retrieve_bm25(query: str, *, top_k: int) -> list[RetrievedTurn]:
+def retrieve_bm25(
+    query: str, *, top_k: int, exclude_ids: set[str] | None = None
+) -> list[RetrievedTurn]:
     bm25_path = Path("data/bm25.pkl")
     if not bm25_path.exists():
         return []
     bm25, ids = load(bm25_path)
     scores = score_bm25(bm25, query)
-    pairs = sorted(zip(ids, scores, strict=True), key=lambda x: x[1], reverse=True)[:top_k]
+    ranked = sorted(zip(ids, scores, strict=True), key=lambda x: x[1], reverse=True)
+    if exclude_ids:
+        # Drop excluded ids BEFORE the top_k slice so top_k stays honest.
+        ranked = [p for p in ranked if p[0] not in exclude_ids]
+    pairs = ranked[:top_k]
     if not pairs:
         return []
     selected_ids = [p[0] for p in pairs]
