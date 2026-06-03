@@ -87,3 +87,43 @@ def test_retrieve_forwards_exclude_ids_to_both(monkeypatch) -> None:
     asyncio.run(retr.retrieve("q", client=object(), exclude_ids={"gold"}))
     assert seen["dense"] == {"gold"}
     assert seen["bm25"] == {"gold"}
+
+
+# --- Task 4: _gen_all forwards logit_bias --------------------------------------
+def test_gen_all_forwards_logit_bias() -> None:
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path("scripts").resolve()))
+    import compare_persona as cp
+
+    captured: dict[str, object] = {}
+
+    class _Client:
+        class chat:
+            class completions:
+                @staticmethod
+                async def create(**kwargs: object) -> object:
+                    captured.update(kwargs)
+                    return SimpleNamespace(
+                        choices=[
+                            SimpleNamespace(
+                                message=SimpleNamespace(content="ok"),
+                                finish_reason="stop",
+                            )
+                        ],
+                        usage=SimpleNamespace(prompt_tokens=1, completion_tokens=1),
+                    )
+
+    asyncio.run(
+        cp._gen_all(
+            _Client(),
+            "m",
+            [[{"role": "user", "content": "hi"}]],
+            temperature=0.8,
+            max_tokens=10,
+            concurrency=1,
+            logit_bias={123: 2},
+        )
+    )
+    assert captured.get("logit_bias") == {123: 2}

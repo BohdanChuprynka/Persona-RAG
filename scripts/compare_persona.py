@@ -85,6 +85,7 @@ async def _gen_all(
     temperature: float,
     max_tokens: int,
     concurrency: int,
+    logit_bias: dict[int, int] | None = None,
 ) -> list[dict[str, Any]]:
     sem = asyncio.Semaphore(concurrency)
 
@@ -92,12 +93,15 @@ async def _gen_all(
         async with sem:
             t0 = time.perf_counter()
             try:
-                r = await client.chat.completions.create(
-                    model=model,
-                    messages=cast(Any, messages),
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                )
+                kwargs: dict[str, Any] = {
+                    "model": model,
+                    "messages": cast(Any, messages),
+                    "temperature": temperature,
+                    "max_tokens": max_tokens,
+                }
+                if logit_bias:
+                    kwargs["logit_bias"] = logit_bias
+                r = await client.chat.completions.create(**kwargs)
                 dt = time.perf_counter() - t0
                 txt = r.choices[0].message.content or ""
                 u = r.usage
