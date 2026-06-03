@@ -12,6 +12,7 @@ from pydantic import BaseModel
 class RankedInsight(BaseModel):
     id: str
     text: str
+    text_en: str | None = None
     category: str
     subject: str
     confidence: float
@@ -51,6 +52,7 @@ def from_qdrant_point(point: Any) -> RankedInsight:
     return RankedInsight(
         id=str(point.id),
         text=p.get("text", ""),
+        text_en=p.get("text_en"),
         category=p.get("category", "bio"),
         subject=p.get("subject", ""),
         confidence=float(p.get("confidence", 0.5)),

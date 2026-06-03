@@ -93,9 +93,11 @@ async def persist_insights(
                     eligible_statuses[ci.id] = statuses[ci.id]
                 continue
 
-            # Existing row — apply user-touch protection
+            # Existing row — apply user-touch protection. "vault" facts are
+            # user-curated (spec 2026-06-03 §7) and must never be overwritten by a
+            # chat re-run that happens to derive the same (category, subject) id.
             if (
-                existing.source in ("user_verified", "onboarding")
+                existing.source in ("user_verified", "onboarding", "vault")
                 or existing.review_status == "rejected"
             ):
                 # User has authority on this insight. Only bump evidence freshness

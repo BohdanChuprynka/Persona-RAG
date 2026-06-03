@@ -44,6 +44,12 @@ log = get_logger()
 
 VAULT_CATEGORIES = {"bio", "relationship", "value", "opinion"}
 
+# Vault notes are user-authored, so the facts are trusted (like onboarding). We do
+# NOT ask the model to rate confidence — gpt-4o-mini echoed the schema's 0.0
+# placeholder on every fact and sank them all to "pending". Assign a fixed high
+# value so curated facts route to "approved".
+_VAULT_FACT_CONFIDENCE = 0.9
+
 VAULT_EXTRACT_SYSTEM_PROMPT = """\
 You extract DURABLE IDENTITY facts about {persona_name} from their own first-person
 notes. The text is already written by {persona_name} — treat every statement as theirs
@@ -68,8 +74,7 @@ Output ONLY valid JSON:
       "category": "bio|relationship|value|opinion",
       "subject": "short lowercase noun-phrase, e.g. 'school', 'best friend'",
       "text_uk": "<one Ukrainian sentence>",
-      "text_en": "<one English sentence>",
-      "confidence": 0.0
+      "text_en": "<one English sentence>"
     }}
   ]
 }}
@@ -96,7 +101,7 @@ class RawVaultFact(BaseModel):
     category: Literal["bio", "relationship", "value", "opinion"]
     subject: str
     text_uk: str
-    text_en: str
+    text_en: str | None = None
     confidence: float
     source_file: str
 
@@ -106,7 +111,7 @@ class VaultFact(BaseModel):
     category: str
     subject: str  # canonical
     text_uk: str
-    text_en: str
+    text_en: str | None = None
     confidence: float
     source_files: list[str]
 
@@ -168,13 +173,16 @@ def parse_vault_response(text: str, *, source_file: str) -> list[RawVaultFact]:
         if not isinstance(item, dict) or item.get("category") not in VAULT_CATEGORIES:
             continue
         try:
+            # text_en is optional: coerce JSON null / missing to real None (not the
+            # string "None") and keep uk-only facts; _render_fact falls back to uk.
+            te = item.get("text_en")
             out.append(
                 RawVaultFact(
                     category=item["category"],
                     subject=str(item["subject"]),
                     text_uk=str(item["text_uk"]),
-                    text_en=str(item["text_en"]),
-                    confidence=float(item.get("confidence", 0.5)),
+                    text_en=str(te) if te else None,
+                    confidence=_VAULT_FACT_CONFIDENCE,
                     source_file=source_file,
                 )
             )
@@ -196,7 +204,7 @@ async def extract_vault_chunk(chunk: str, *, source_file: str) -> list[RawVaultF
     resp = await chat_complete(
         messages,
         model=s.INSIGHTS_EXTRACT_MODEL,
-        temperature=0.2,
+        temperature=0.0,
         max_tokens=2000,
         response_format={"type": "json_object"},
     )
@@ -305,19 +313,41 @@ async def persist_vault(
 async def rebuild_vault(
     *, directory: str, qdrant_client: QdrantClient, collection: str, threshold: float
 ) -> int:
-    """Full rebuild: wipe prior vault facts, then re-extract the whole folder."""
-    await _wipe_vault_rows(qdrant_client=qdrant_client, collection=collection)
+    """Full rebuild via BUILD-THEN-SWAP: extract the whole folder FIRST, then wipe +
+    persist. A wipe-before-extract would empty the store if the extractor (API) is
+    down mid-run — the exact identity-fabrication failure this feature prevents. A
+    single chunk's failure degrades to a skipped chunk; a TOTAL failure aborts
+    without wiping so existing curated facts survive."""
     docs = read_vault_files(directory)
     raws: list[RawVaultFact] = []
+    chunks_total = 0
+    chunks_failed = 0
     for doc in docs:
         for i, chunk in enumerate(chunk_markdown(doc.text)):
+            chunks_total += 1
             try:
                 raws.extend(await extract_vault_chunk(chunk, source_file=f"{doc.relpath}#{i}"))
-            except ValueError as e:
+            except Exception as e:
+                chunks_failed += 1
                 log.warning("vault_chunk_failed", file=doc.relpath, chunk=i, error=str(e)[:200])
     facts = consolidate_vault(raws)
+
+    # Never wipe a populated store on a total extraction outage. Only a genuinely
+    # empty folder (zero chunks) is allowed to clear the vault.
+    if chunks_total and chunks_failed == chunks_total:
+        log.error("vault_rebuild_aborted", reason="all chunks failed", chunks=chunks_total)
+        raise RuntimeError("vault rebuild aborted: all chunks failed extraction (store preserved)")
+
+    await _wipe_vault_rows(qdrant_client=qdrant_client, collection=collection)
     await persist_vault(
         facts, qdrant_client=qdrant_client, collection=collection, threshold=threshold
     )
-    log.info("vault_rebuild_done", docs=len(docs), raws=len(raws), facts=len(facts))
+    log.info(
+        "vault_rebuild_done",
+        docs=len(docs),
+        chunks=chunks_total,
+        chunks_failed=chunks_failed,
+        raws=len(raws),
+        facts=len(facts),
+    )
     return len(facts)

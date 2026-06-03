@@ -122,18 +122,39 @@ def test_parse_vault_response_happy():
     assert out[0].source_file == "me.md"
 
 
-def test_parse_vault_rejects_unknown_category_and_missing_lang():
+def test_parse_vault_rejects_unknown_category_and_missing_uk():
     bad_cat = (
-        '{"facts": [{"category": "behavior", "subject": "x",'
-        ' "text_uk": "a", "text_en": "b", "confidence": 0.5}]}'
+        '{"facts": [{"category": "behavior", "subject": "x",' ' "text_uk": "a", "text_en": "b"}]}'
     )
     assert parse_vault_response(bad_cat, source_file="f") == []
-    missing = '{"facts": [{"category": "bio", "subject": "x", "text_uk": "a", "confidence": 0.5}]}'
-    assert parse_vault_response(missing, source_file="f") == []
+    # text_uk is required (the canonical); a fact missing it is dropped.
+    missing_uk = '{"facts": [{"category": "bio", "subject": "x", "text_en": "b"}]}'
+    assert parse_vault_response(missing_uk, source_file="f") == []
+
+
+def test_parse_vault_keeps_uk_only_fact():
+    """text_en is optional: a uk-only fact is kept with text_en=None (not the string
+    'None'); _render_fact falls back to text_uk for any query language."""
+    uk_only = '{"facts": [{"category": "bio", "subject": "x", "text_uk": "тільки укр"}]}'
+    out = parse_vault_response(uk_only, source_file="f")
+    assert len(out) == 1
+    assert out[0].text_en is None
 
 
 def test_parse_vault_strips_fence():
     assert parse_vault_response('```json\n{"facts": []}\n```', source_file="f") == []
+
+
+def test_parse_vault_assigns_trusted_confidence():
+    """Regression: vault facts are user-authored -> trusted. The parser ignores the
+    model's confidence (gpt-4o-mini echoed the schema's 0.0 and sank every fact to
+    'pending') and assigns a high value so curated facts route to 'approved'."""
+    resp = (
+        '{"facts": [{"category": "bio", "subject": "school",'
+        ' "text_uk": "a", "text_en": "b", "confidence": 0.0}]}'
+    )
+    out = parse_vault_response(resp, source_file="me.md")
+    assert out[0].confidence >= 0.6
 
 
 # --- Task 5: extract (mocked LLM) ---
@@ -150,7 +171,7 @@ async def test_extract_vault_chunk_uses_json_mode_low_temp():
     assert len(out) == 1 and out[0].category == "value"
     kwargs = mock.call_args.kwargs
     assert kwargs["response_format"] == {"type": "json_object"}
-    assert kwargs["temperature"] == 0.2
+    assert kwargs["temperature"] == 0.0  # deterministic extraction (text-stability)
 
 
 # --- Task 6: consolidate ---
@@ -303,3 +324,98 @@ async def test_rebuild_vault_end_to_end(tmp_path, monkeypatch):
     with Session(make_engine(db)) as s:
         rows = list(s.exec(select(InsightRow).where(InsightRow.source == "vault")).all())
     assert len(rows) == 1 and rows[0].subject == "school"
+
+
+@pytest.mark.asyncio
+async def test_rebuild_preserves_facts_on_total_extraction_failure(tmp_path, monkeypatch):
+    """Build-then-swap: if EVERY chunk fails extraction (API outage), rebuild aborts
+    WITHOUT wiping, so existing curated vault facts survive — a wipe-first rebuild
+    would empty the store, the exact fabrication failure this feature prevents."""
+    db = str(tmp_path / "p.db")
+    make_engine(db)
+    monkeypatch.setattr("persona_rag.insights.vault.make_engine", lambda: make_engine(db))
+    now = datetime.now(UTC)
+    with Session(make_engine(db)) as s:
+        s.add(
+            InsightRow(
+                id="keep",
+                category="bio",
+                subject="school",
+                text="EXISTING",
+                text_en="existing",
+                confidence=0.9,
+                evidence_count=1,
+                earliest_date=now,
+                latest_date=now,
+                trajectory=None,
+                source_session_ids="[]",
+                source="vault",
+                review_status="approved",
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        s.commit()
+    vault_dir = tmp_path / "vault"
+    vault_dir.mkdir()
+    (vault_dir / "me.md").write_text("# Me\nsome identity prose.", encoding="utf-8")
+    fake_q = MagicMock()
+    with (
+        patch(
+            "persona_rag.insights.vault.chat_complete",
+            AsyncMock(side_effect=RuntimeError("api down")),
+        ),
+        patch("persona_rag.insights.vault.embed_batch", AsyncMock(return_value=[])),
+        pytest.raises(RuntimeError),
+    ):
+        await rebuild_vault(
+            directory=str(vault_dir),
+            qdrant_client=fake_q,
+            collection="self_insights",
+            threshold=0.6,
+        )
+    with Session(make_engine(db)) as s:
+        rows = list(s.exec(select(InsightRow).where(InsightRow.source == "vault")).all())
+    assert len(rows) == 1 and rows[0].text == "EXISTING"  # survived the failed rebuild
+    fake_q.delete.assert_not_called()  # the wipe never fired
+
+
+@pytest.mark.asyncio
+async def test_rebuild_twice_yields_identical_rows(tmp_path, monkeypatch):
+    """Idempotency across full rebuilds: running rebuild_vault twice on unchanged
+    input yields the same id set (no duplicate accumulation, no PK crash)."""
+    db = str(tmp_path / "p.db")
+    make_engine(db)
+    monkeypatch.setattr("persona_rag.insights.vault.make_engine", lambda: make_engine(db))
+    vault_dir = tmp_path / "vault"
+    vault_dir.mkdir()
+    (vault_dir / "me.md").write_text("# Me\nidentity.", encoding="utf-8")
+    canned = (
+        '{"facts": [{"category": "bio", "subject": "school",'
+        ' "text_uk": "навч", "text_en": "studies"}]}'
+    )
+    fake_q = MagicMock()
+
+    async def _run():
+        with (
+            patch("persona_rag.insights.vault.chat_complete", AsyncMock(return_value=canned)),
+            patch("persona_rag.insights.vault.embed_batch", AsyncMock(return_value=[[0.0] * 1536])),
+        ):
+            await rebuild_vault(
+                directory=str(vault_dir),
+                qdrant_client=fake_q,
+                collection="self_insights",
+                threshold=0.6,
+            )
+
+    await _run()
+    with Session(make_engine(db)) as s:
+        ids1 = sorted(
+            r.id for r in s.exec(select(InsightRow).where(InsightRow.source == "vault")).all()
+        )
+    await _run()
+    with Session(make_engine(db)) as s:
+        ids2 = sorted(
+            r.id for r in s.exec(select(InsightRow).where(InsightRow.source == "vault")).all()
+        )
+    assert ids1 == ids2 and len(ids1) == 1
