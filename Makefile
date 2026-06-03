@@ -1,4 +1,4 @@
-.PHONY: install hooks init-data whitelist-admin lint format type test ingest run run-local streamlit eval up down logs mlflow-ui clean compare compare-plot compare-human compare-score compare-arma turing-build turing-score
+.PHONY: install hooks init-data whitelist-admin lint format type test ingest run run-local streamlit eval up down logs mlflow-ui clean compare compare-plot compare-human compare-score compare-turing compare-turing-score compare-arma turing-build turing-score
 
 install:
 	uv sync --all-extras
@@ -50,10 +50,17 @@ compare-plot:
 	uv run python scripts/plot_comparison.py --name main
 
 compare-human:
-	uv run python scripts/build_human_eval.py --name main --n 100
+	uv run python scripts/build_human_eval.py --name main --n 40
 
 compare-score:
 	uv run python scripts/score_human_eval.py --name main
+
+# Turing panel: your REAL reply vs the LoRA ("which is the bot?") + tell capture.
+compare-turing:
+	uv run python scripts/build_human_eval.py --name main --n 40 --mode turing
+
+compare-turing-score:
+	uv run python scripts/score_human_eval.py --name main --mode turing
 
 # Arm A: production-realism (shipped API rich+retrieval+levers vs LoRA thin). Needs
 # Qdrant up + index built + llama-server. See docs/superpowers/specs/2026-06-02-arm-a-*.
@@ -84,7 +91,7 @@ clean:
 	rm -rf .pytest_cache .ruff_cache .mypy_cache build dist *.egg-info
 	find . -type d -name __pycache__ -exec rm -rf {} +
 
-.PHONY: insights insights-full insights-dry
+.PHONY: insights insights-full insights-dry insights-vault
 
 insights:
 	uv run python scripts/distill_insights.py --mode incremental
@@ -94,3 +101,7 @@ insights-full:
 
 insights-dry:
 	uv run python scripts/distill_insights.py --dry-run
+
+# Vault fact ingestion (spec 2026-06-03): full-rebuild from data/raw/vault/.
+insights-vault:
+	uv run python scripts/ingest_vault.py

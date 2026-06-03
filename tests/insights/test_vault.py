@@ -1,13 +1,31 @@
+# ruff: noqa: RUF001
 from __future__ import annotations
 
 from datetime import UTC, datetime
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from sqlmodel import Session, select
 
 from persona_rag.config import get_settings
 from persona_rag.db.engine import make_engine
 from persona_rag.db.models import InsightRow
+from persona_rag.insights.vault import (
+    VAULT_EXTRACT_SYSTEM_PROMPT,
+    RawVaultFact,
+    VaultFact,
+    _wipe_vault_rows,
+    chunk_markdown,
+    consolidate_vault,
+    extract_vault_chunk,
+    parse_vault_response,
+    persist_vault,
+    read_vault_files,
+    rebuild_vault,
+)
+
+# --- Task 1/2: settings, fixture, model ---
 
 
 def test_vault_settings_exist():
@@ -52,3 +70,236 @@ def test_insightrow_has_text_en(tmp_path):
     with Session(make_engine(db)) as s:
         row = s.exec(select(InsightRow).where(InsightRow.id == "x1")).one()
     assert row.text_en == "studies"
+
+
+# --- Task 3: read + chunk ---
+
+
+def test_chunk_splits_on_headings():
+    text = "# A\nintro line\n## B\nbody b\n## C\nbody c"
+    chunks = chunk_markdown(text)
+    assert len(chunks) == 3
+    assert any("intro line" in c for c in chunks)
+    assert any("body b" in c for c in chunks)
+
+
+def test_chunk_subsplits_long_section():
+    long = "# H\n" + ("параграф один.\n\n" * 200)
+    chunks = chunk_markdown(long, max_chars=1500)
+    assert len(chunks) > 1
+    assert all(len(c) <= 1700 for c in chunks)
+
+
+def test_read_vault_files_reads_fixture(tmp_path):
+    (tmp_path / "a.md").write_text("# t\nhello", encoding="utf-8")
+    (tmp_path / "skip.txt").write_text("ignored", encoding="utf-8")
+    docs = read_vault_files(str(tmp_path))
+    assert len(docs) == 1
+    assert docs[0].relpath == "a.md"
+    assert "hello" in docs[0].text
+
+
+# --- Task 4: prompt + parser ---
+
+
+def test_vault_prompt_lists_identity_categories_and_dual_lang():
+    p = VAULT_EXTRACT_SYSTEM_PROMPT.format(persona_name="TestPersona")
+    for cat in ("bio", "relationship", "value", "opinion"):
+        assert cat in p
+    assert "text_uk" in p and "text_en" in p
+    assert "interest" not in p and "behavior" not in p
+
+
+def test_parse_vault_response_happy():
+    resp = (
+        '{"facts": [{"category": "bio", "subject": "school",'
+        ' "text_uk": "Навчається на CS", "text_en": "Studies CS", "confidence": 0.9}]}'
+    )
+    out = parse_vault_response(resp, source_file="me.md")
+    assert len(out) == 1 and isinstance(out[0], RawVaultFact)
+    assert out[0].text_uk == "Навчається на CS"
+    assert out[0].text_en == "Studies CS"
+    assert out[0].source_file == "me.md"
+
+
+def test_parse_vault_rejects_unknown_category_and_missing_lang():
+    bad_cat = (
+        '{"facts": [{"category": "behavior", "subject": "x",'
+        ' "text_uk": "a", "text_en": "b", "confidence": 0.5}]}'
+    )
+    assert parse_vault_response(bad_cat, source_file="f") == []
+    missing = '{"facts": [{"category": "bio", "subject": "x", "text_uk": "a", "confidence": 0.5}]}'
+    assert parse_vault_response(missing, source_file="f") == []
+
+
+def test_parse_vault_strips_fence():
+    assert parse_vault_response('```json\n{"facts": []}\n```', source_file="f") == []
+
+
+# --- Task 5: extract (mocked LLM) ---
+
+
+@pytest.mark.asyncio
+async def test_extract_vault_chunk_uses_json_mode_low_temp():
+    canned = (
+        '{"facts": [{"category": "value", "subject": "directness",'
+        ' "text_uk": "Цінує прямоту", "text_en": "Values directness", "confidence": 0.9}]}'
+    )
+    with patch("persona_rag.insights.vault.chat_complete", AsyncMock(return_value=canned)) as mock:
+        out = await extract_vault_chunk("Ціную прямоту", source_file="me.md")
+    assert len(out) == 1 and out[0].category == "value"
+    kwargs = mock.call_args.kwargs
+    assert kwargs["response_format"] == {"type": "json_object"}
+    assert kwargs["temperature"] == 0.2
+
+
+# --- Task 6: consolidate ---
+
+
+def _raw(cat, subj, uk, en, conf, f="me.md"):
+    return RawVaultFact(
+        category=cat, subject=subj, text_uk=uk, text_en=en, confidence=conf, source_file=f
+    )
+
+
+def test_consolidate_dedups_by_category_subject():
+    raws = [
+        _raw("bio", "School", "Навчається на CS", "Studies CS", 0.8),
+        _raw("bio", "school", "Вчиться на CS", "Goes to CS", 0.9),
+        _raw("value", "directness", "Цінує прямоту", "Values directness", 0.7),
+    ]
+    out = consolidate_vault(raws)
+    assert len(out) == 2
+    school = next(f for f in out if f.category == "bio")
+    assert school.confidence == 0.9
+    assert school.text_en == "Goes to CS"
+
+
+def test_consolidate_is_idempotent_stable_ids():
+    raws = [_raw("bio", "school", "uk", "en", 0.9)]
+    a = consolidate_vault(raws)
+    b = consolidate_vault(raws)
+    assert [f.id for f in a] == [f.id for f in b]
+
+
+# --- Task 7: persist + wipe ---
+
+
+@pytest.mark.asyncio
+async def test_persist_vault_writes_rows_and_qdrant(tmp_path, monkeypatch):
+    db = str(tmp_path / "p.db")
+    make_engine(db)
+    monkeypatch.setattr("persona_rag.insights.vault.make_engine", lambda: make_engine(db))
+    facts = [
+        VaultFact(
+            id="id_hi",
+            category="bio",
+            subject="school",
+            text_uk="навч",
+            text_en="studies",
+            confidence=0.9,
+            source_files=["me.md"],
+        ),
+        VaultFact(
+            id="id_lo",
+            category="opinion",
+            subject="quux",
+            text_uk="думка",
+            text_en="opinion",
+            confidence=0.3,
+            source_files=["me.md"],
+        ),
+    ]
+    fake_q = MagicMock()
+    with patch("persona_rag.insights.vault.embed_batch", AsyncMock(return_value=[[0.0] * 1536])):
+        await persist_vault(facts, qdrant_client=fake_q, collection="self_insights", threshold=0.6)
+    with Session(make_engine(db)) as s:
+        rows = {r.id: r for r in s.exec(select(InsightRow)).all()}
+    assert rows["id_hi"].source == "vault" and rows["id_hi"].review_status == "approved"
+    assert rows["id_hi"].text_en == "studies"
+    assert rows["id_lo"].review_status == "pending"
+    fake_q.upsert.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_rebuild_wipes_prior_vault_rows(tmp_path, monkeypatch):
+    db = str(tmp_path / "p.db")
+    make_engine(db)
+    monkeypatch.setattr("persona_rag.insights.vault.make_engine", lambda: make_engine(db))
+    now = datetime.now(UTC)
+    with Session(make_engine(db)) as s:
+        s.add(
+            InsightRow(
+                id="stale",
+                category="bio",
+                subject="old",
+                text="old",
+                confidence=1.0,
+                evidence_count=1,
+                earliest_date=now,
+                latest_date=now,
+                trajectory=None,
+                source_session_ids="[]",
+                source="vault",
+                review_status="approved",
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        s.add(
+            InsightRow(
+                id="chat_keep",
+                category="bio",
+                subject="c",
+                text="c",
+                confidence=1.0,
+                evidence_count=1,
+                earliest_date=now,
+                latest_date=now,
+                trajectory=None,
+                source_session_ids="[]",
+                source="chat",
+                review_status="approved",
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        s.commit()
+    fake_q = MagicMock()
+    await _wipe_vault_rows(qdrant_client=fake_q, collection="self_insights")
+    with Session(make_engine(db)) as s:
+        ids = {r.id for r in s.exec(select(InsightRow)).all()}
+    assert "stale" not in ids and "chat_keep" in ids
+    fake_q.delete.assert_called_once()
+
+
+# --- Task 9: rebuild orchestrator end-to-end ---
+
+
+@pytest.mark.asyncio
+async def test_rebuild_vault_end_to_end(tmp_path, monkeypatch):
+    db = str(tmp_path / "p.db")
+    make_engine(db)
+    monkeypatch.setattr("persona_rag.insights.vault.make_engine", lambda: make_engine(db))
+    vault_dir = tmp_path / "vault"
+    vault_dir.mkdir()
+    (vault_dir / "me.md").write_text("# Me\nНавчаюсь на CS.", encoding="utf-8")
+    canned = (
+        '{"facts": [{"category": "bio", "subject": "school",'
+        ' "text_uk": "Навчається на CS", "text_en": "Studies CS", "confidence": 0.9}]}'
+    )
+    fake_q = MagicMock()
+    with (
+        patch("persona_rag.insights.vault.chat_complete", AsyncMock(return_value=canned)),
+        patch("persona_rag.insights.vault.embed_batch", AsyncMock(return_value=[[0.0] * 1536])),
+    ):
+        n = await rebuild_vault(
+            directory=str(vault_dir),
+            qdrant_client=fake_q,
+            collection="self_insights",
+            threshold=0.6,
+        )
+    assert n == 1
+    with Session(make_engine(db)) as s:
+        rows = list(s.exec(select(InsightRow).where(InsightRow.source == "vault")).all())
+    assert len(rows) == 1 and rows[0].subject == "school"
