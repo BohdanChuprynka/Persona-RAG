@@ -759,7 +759,7 @@ Prose from **spec §3 Part III** + `comparison-findings.md` + `arm-a-findings.md
   - **3.3 What the machinery buys.** B→A API side: len 128.8→7.0, `!` 0.65→0.00, openers **regress** 5.02→3.70. `@fig-machinery` (F4) + the machinery table.
   - **3.4 Steered vs learned.** `!` 0.65→0.033 (prompt) →0.000 (bias); verdict unchanged. `@fig-steered` (F5) + steered/learned table.
   - **3.5 Per-language.** cyrillic (87%, n=261) wins length; English (n=27) tie + shared weakness (low-confidence). `@fig-lang` (F6) + per-language table.
-  - **3.6 Effect size & robustness.** From `effect_sizes.json`: **Cliff's δ ≈ 0.95 (large), LoRA closer ≈ 292/300, sign-test p ≪ 1e-50**, rank-biserial; the forest plot across all six runs (incl. seed1 replication, leak arms underpowered). `@fig-forest` (F7).
+  - **3.6 Effect size & robustness.** From `effect_sizes.json`, the per-item length-error effect size **splits the arms** (report both, honestly): **Arm B δ = 0.949 (large), LoRA closer 292/299, sign-test p ≈ 8e-77** — the bare-prompt length win is overwhelming and per-item consistent; **Arm A δ = 0.043 (negligible), 147/293 — a per-item wash.** Explain the corpus-vs-per-item distinction: Arm A's LoRA length edge is *distributional* (corpus EMD 3.4 vs 7.0, CI excludes 0), but per *individual message* the production machinery has closed the gap. This is a genuine "what the machinery buys" beat, not a contradiction. Plus the forest plot across all six runs (incl. seed1 replication; leak arms underpowered). `@fig-forest` (F7).
   - **3.7 Anti-memorization.** LoRA copy 10.3% vs natural floor 7.0% (real-vs-train); not parroting. `@fig-copy` (F9).
   - **3.8 Operational.** $0 vs $0.37/1k; ~11× context tax (2400 vs 210 tok); p50 near-tie. `@fig-ops` (F8).
 
