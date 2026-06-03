@@ -6,6 +6,8 @@ import math
 
 from persona_rag.eval.compare import (
     arm_summary,
+    bucket_tells,
+    build_turing_kit,
     compare_scorecard,
     copy_leak_rate,
     distinct_reply_rate,
@@ -15,6 +17,7 @@ from persona_rag.eval.compare import (
     len_wasserstein_metric,
     opener_entropy,
     paired_bootstrap_delta_ci,
+    score_detection,
     score_preferences,
     shape_js_metric,
     wilson_ci,
@@ -155,3 +158,105 @@ def test_score_preferences() -> None:
     assert res["verdict"] in ("lora", "tie")
     # unknown item_ids are counted, not crashed on
     assert score_preferences({"999": "A"}, key)["unknown"] == 1
+
+
+# --------------------------------------------------------------------------- #
+# LoRA-vs-real (Turing) kit: blinding, detection scoring, tell bucketing
+# --------------------------------------------------------------------------- #
+def test_bucket_tells_voice_vs_knowledge() -> None:
+    # 'missing-facts' is the only knowledge tell (fixable by RAG); the rest are
+    # voice tells (fixable by decode/training); 'other' is uncategorized.
+    tells = ["wording", "length", "missing-facts", "missing-facts", "punct", "other"]
+    b = bucket_tells(tells)
+    assert b["voice"] == 3  # wording, length, punct
+    assert b["knowledge"] == 2  # missing-facts x2
+    assert b["other"] == 1
+    assert b["n"] == 6
+    # fractions are over the categorized total (voice+knowledge=5), excluding 'other'
+    assert abs(b["voice_frac"] - 3 / 5) < 1e-9
+    assert abs(b["knowledge_frac"] - 2 / 5) < 1e-9
+
+
+def test_bucket_tells_empty_is_nan() -> None:
+    b = bucket_tells([])
+    assert b["voice"] == 0 and b["knowledge"] == 0
+    assert math.isnan(b["voice_frac"]) and math.isnan(b["knowledge_frac"])
+
+
+def test_score_detection_detectable_with_tells() -> None:
+    # 9/10 decisive picks correctly catch the machine -> detectable; tells bucketed.
+    key = {str(i): {"A": "machine", "B": "real"} for i in range(10)}
+    choices: dict[str, dict[str, object]] = {
+        str(i): {"pick": "A", "tell": "missing-facts"} for i in range(8)
+    }
+    choices["8"] = {"pick": "A", "tell": "wording"}  # correct catch, voice tell
+    choices["9"] = {"pick": "B", "tell": None}  # picked the real reply -> mistaken
+    res = score_detection(choices, key)
+    assert res["machine_caught"] == 9
+    assert res["human_mistaken"] == 1
+    assert res["decisive"] == 10
+    assert abs(res["detection_rate"] - 0.9) < 1e-9
+    assert res["wilson_95ci"][0] > 0.5
+    assert res["verdict"] == "detectable"
+    # tells from the 9 correct catches: 8 missing-facts (knowledge) + 1 wording (voice)
+    assert res["tells"]["knowledge"] == 8
+    assert res["tells"]["voice"] == 1
+
+
+def test_score_detection_coin_flip_is_indistinguishable() -> None:
+    # machine alternates slot; rater always picks "A" -> catches exactly half = chance.
+    key = {
+        str(i): ({"A": "machine", "B": "real"} if i % 2 == 0 else {"A": "real", "B": "machine"})
+        for i in range(10)
+    }
+    choices = {str(i): {"pick": "A", "tell": "wording"} for i in range(10)}
+    res = score_detection(choices, key)
+    assert res["machine_caught"] == 5
+    assert res["human_mistaken"] == 5
+    assert abs(res["detection_rate"] - 0.5) < 1e-9
+    lo, hi = res["wilson_95ci"]
+    assert lo < 0.5 < hi  # CI spans chance
+    assert res["verdict"] == "indistinguishable"
+
+
+def test_score_detection_unsure_and_unknown() -> None:
+    key = {"0": {"A": "machine", "B": "real"}}
+    res = score_detection(
+        {"0": {"pick": "unsure", "tell": None}, "99": {"pick": "A", "tell": None}}, key
+    )
+    assert res["unsure"] == 1
+    assert res["unknown"] == 1
+    assert res["decisive"] == 0
+    assert math.isnan(res["detection_rate"])
+    # no decisive evidence cannot reject chance -> indistinguishable
+    assert res["verdict"] == "indistinguishable"
+
+
+def test_build_turing_kit_blinds_and_keys_correctly() -> None:
+    pairs: list[dict[str, object]] = [
+        {"item_id": i, "incoming": f"ctx{i}", "real": f"real{i}", "gen_lora": f"lora{i}"}
+        for i in range(5)
+    ]
+    # an unusable pair (blank lora) must be filtered out
+    pairs.append({"item_id": 99, "incoming": "x", "real": "r", "gen_lora": "   "})
+    blind, key = build_turing_kit(pairs, n=10, seed=3)
+    assert len(blind) == 5  # the blank-lora pair dropped
+    by_id = {str(p["item_id"]): p for p in pairs}
+    for it in blind:
+        iid = it["item_id"]
+        k = key[iid]
+        # whichever slot the key calls 'machine' must hold that pair's lora text
+        machine_slot = "a" if k["A"] == "machine" else "b"
+        real_slot = "a" if k["A"] == "real" else "b"
+        assert it[machine_slot] == by_id[iid]["gen_lora"]
+        assert it[real_slot] == by_id[iid]["real"]
+
+
+def test_build_turing_kit_deterministic() -> None:
+    pairs: list[dict[str, object]] = [
+        {"item_id": i, "incoming": f"c{i}", "real": f"r{i}", "gen_lora": f"l{i}"} for i in range(20)
+    ]
+    b1, k1 = build_turing_kit(pairs, n=8, seed=7)
+    b2, k2 = build_turing_kit(pairs, n=8, seed=7)
+    assert [x["item_id"] for x in b1] == [x["item_id"] for x in b2]
+    assert k1 == k2

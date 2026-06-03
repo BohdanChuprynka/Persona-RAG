@@ -1,4 +1,4 @@
-.PHONY: install hooks init-data whitelist-admin lint format type test ingest run run-local streamlit eval up down logs mlflow-ui clean compare compare-plot compare-human compare-score
+.PHONY: install hooks init-data whitelist-admin lint format type test ingest run run-local streamlit eval up down logs mlflow-ui clean compare compare-plot compare-human compare-score turing-build turing-score
 
 install:
 	uv sync --all-extras
@@ -54,6 +54,13 @@ compare-human:
 
 compare-score:
 	uv run python scripts/score_human_eval.py --name main
+
+# LoRA-vs-real Turing kit (which reply is the machine?) + its scorer.
+turing-build:
+	uv run python scripts/build_turing_eval.py --name main --n 100
+
+turing-score:
+	uv run python scripts/score_turing_eval.py --name main
 
 up:
 	docker-compose up -d qdrant mlflow

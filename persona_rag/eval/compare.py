@@ -365,3 +365,123 @@ def score_preferences(choices: dict[str, str], key: dict[str, dict[str, str]]) -
         "wilson_95ci": [lo, hi],
         "verdict": verdict,
     }
+
+
+# --------------------------------------------------------------------------- #
+# LoRA-vs-real (Turing) panel — the ABSOLUTE-quality test: does it pass as Bohdan?
+# --------------------------------------------------------------------------- #
+# The API-vs-LoRA panel asks "which is more Bohdan"; this one pairs the LoRA reply
+# against Bohdan's REAL reply and asks "which is the machine". A "tell" is the
+# rater's reason for catching it: voice tells are fixable by decode/training, the
+# lone knowledge tell (missing real-world specifics) is fixable by retrieval/RAG.
+# That split localizes the remaining gap (audit follow-up; the RAG business case).
+VOICE_TELLS = frozenset({"wording", "length", "punct", "too-generic", "topic"})
+KNOWLEDGE_TELLS = frozenset({"missing-facts"})
+
+
+def bucket_tells(tells: list[str]) -> dict[str, Any]:
+    """Classify Turing "why I caught it" tags into voice vs knowledge buckets.
+
+    ``voice`` = style tells (decode/training fixes), ``knowledge`` = missing-facts
+    (RAG fixes), ``other`` = uncategorized. Fractions are over the *categorized*
+    total (voice + knowledge) so 'other' never dilutes the read; NaN when nothing
+    is categorized.
+    """
+    by_tag = Counter(t for t in tells if t)
+    voice = sum(c for t, c in by_tag.items() if t in VOICE_TELLS)
+    knowledge = sum(c for t, c in by_tag.items() if t in KNOWLEDGE_TELLS)
+    categorized = voice + knowledge
+    return {
+        "by_tag": dict(by_tag),
+        "voice": voice,
+        "knowledge": knowledge,
+        "other": sum(by_tag.values()) - categorized,
+        "n": sum(by_tag.values()),
+        "voice_frac": voice / categorized if categorized else math.nan,
+        "knowledge_frac": knowledge / categorized if categorized else math.nan,
+    }
+
+
+def score_detection(choices: dict[str, Any], key: dict[str, dict[str, str]]) -> dict[str, Any]:
+    """Resolve a blind LoRA-vs-real panel ("which reply is the machine?").
+
+    ``choices``: item_id -> {"pick": "A"|"B"|"unsure", "tell": <tag>|None} (a bare
+    "A"/"B"/"unsure" string is also accepted). ``key``: item_id -> {"A":
+    "real"|"machine", "B": ...}, where 'machine' is the LoRA slot.
+
+    ``detection_rate`` = correct machine-catches / decisive picks. A rate whose
+    Wilson 95% CI INCLUDES 0.5 means the LoRA is statistically indistinguishable
+    from Bohdan (it passes the Turing test); a CI strictly above 0.5 means the
+    rater can tell. Tells from the correct catches are bucketed (voice vs
+    knowledge) to localize what's left to fix.
+    """
+    caught = mistaken = unsure = unknown = 0
+    correct_tells: list[str] = []
+    for iid, ch in choices.items():
+        k = key.get(iid)
+        if k is None:
+            unknown += 1
+            continue
+        pick = ch.get("pick") if isinstance(ch, dict) else ch
+        if pick not in ("A", "B"):
+            unsure += 1
+            continue
+        if k.get(pick) == "machine":
+            caught += 1
+            tell = ch.get("tell") if isinstance(ch, dict) else None
+            if tell:
+                correct_tells.append(str(tell))
+        else:
+            mistaken += 1
+    decisive = caught + mistaken
+    lo, hi = wilson_ci(caught, decisive)
+    rate = caught / decisive if decisive else math.nan
+    # The LoRA passes unless the rater beats chance (Wilson lower bound clears 0.5).
+    verdict = "detectable" if (decisive and lo > 0.5) else "indistinguishable"
+    return {
+        "machine_caught": caught,
+        "human_mistaken": mistaken,
+        "unsure": unsure,
+        "unknown": unknown,
+        "decisive": decisive,
+        "detection_rate": rate,
+        "wilson_95ci": [lo, hi],
+        "verdict": verdict,
+        "tells": bucket_tells(correct_tells),
+    }
+
+
+def build_turing_kit(
+    pairs: list[dict[str, Any]], n: int, seed: int
+) -> tuple[list[dict[str, Any]], dict[str, dict[str, str]]]:
+    """Build blind real-vs-LoRA items + un-blinding key from comparison pairs.
+
+    Keeps only pairs with a non-empty ``real`` AND ``gen_lora``, samples up to
+    ``n`` (seeded shuffle), and randomizes which of A/B holds the real reply. The
+    key records {"A": "real"|"machine", "B": ...} where 'machine' is the LoRA, so
+    the scorer resolves a correct catch without the rater ever seeing a label.
+    """
+    rng = random.Random(seed)
+    usable = [
+        p for p in pairs if str(p.get("real", "")).strip() and str(p.get("gen_lora", "")).strip()
+    ]
+    rng.shuffle(usable)
+    usable = usable[:n]
+    blind: list[dict[str, Any]] = []
+    key: dict[str, dict[str, str]] = {}
+    for p in usable:
+        iid = str(p["item_id"])
+        a_is_real = rng.random() < 0.5
+        blind.append(
+            {
+                "item_id": iid,
+                "incoming": p["incoming"],
+                "a": p["real"] if a_is_real else p["gen_lora"],
+                "b": p["gen_lora"] if a_is_real else p["real"],
+            }
+        )
+        key[iid] = {
+            "A": "real" if a_is_real else "machine",
+            "B": "machine" if a_is_real else "real",
+        }
+    return blind, key
