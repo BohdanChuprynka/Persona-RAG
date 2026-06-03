@@ -48,6 +48,20 @@ def test_self_desc_card_uk_default():
     assert "Навчається на CS" in card
 
 
+def test_self_desc_empty_core_injects_nothing():
+    """Casual default: a self_desc query with a suppressed (empty) CORE and no
+    contact memory yields no card. Identity facts sitting in `semantic` are NOT
+    injected -- the self_desc lane never reads them, which is what makes the vague
+    self-intro voice-only."""
+    insights = {
+        "lane": "self_desc",
+        "query_lang": "uk",
+        "core": [],
+        "semantic": [_fact("bio", "school", "Навчається на CS", "Studies CS")],
+    }
+    assert build_fact_card("розкажи про себе", "", insights) is None
+
+
 def test_specific_lane_filters_to_identity_categories():
     insights = {
         "lane": "specific",

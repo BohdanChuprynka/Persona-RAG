@@ -128,10 +128,12 @@ async def test_retrieve_insights_drops_below_score_floor(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_self_desc_query_sets_core_lane(monkeypatch):
-    """A self-description query routes to the CORE lane (by route, not similarity)."""
+async def test_self_desc_loads_core_when_card_enabled(monkeypatch):
+    """Reversible/professional path: with INSIGHTS_SELFDESC_CARD_ENABLED on, a
+    self-description query loads the curated CORE by route (not similarity)."""
     from datetime import UTC, datetime
 
+    from persona_rag.config import get_settings
     from persona_rag.insights.recency import RankedInsight
 
     fake_client = MagicMock()
@@ -167,18 +169,73 @@ async def test_self_desc_query_sets_core_lane(monkeypatch):
         "persona_rag.graph.nodes.retrieve_insights.load_core_facts",
         lambda *, limit, query_lang: core,
     )
-    with (
-        patch(
-            "persona_rag.graph.nodes.retrieve_insights.embed_batch",
-            AsyncMock(return_value=[[0.0] * 1536]),
-        ),
-        patch(
-            "persona_rag.graph.nodes.retrieve_insights.anchor_vecs",
-            AsyncMock(return_value=[[0.0] * 1536]),
-        ),
-    ):
-        out = await retrieve_insights({"user_id": 1, "chat_id": 1, "incoming": "розкажи про себе"})
+    monkeypatch.setenv("INSIGHTS_SELFDESC_CARD_ENABLED", "true")
+    get_settings.cache_clear()
+    try:
+        with (
+            patch(
+                "persona_rag.graph.nodes.retrieve_insights.embed_batch",
+                AsyncMock(return_value=[[0.0] * 1536]),
+            ),
+            patch(
+                "persona_rag.graph.nodes.retrieve_insights.anchor_vecs",
+                AsyncMock(return_value=[[0.0] * 1536]),
+            ),
+        ):
+            out = await retrieve_insights(
+                {"user_id": 1, "chat_id": 1, "incoming": "розкажи про себе"}
+            )
+        ins = out["insights"]
+        assert ins["lane"] == "self_desc"
+        assert ins["query_lang"] == "uk"
+        assert [c.subject for c in ins["core"]] == ["school"]
+    finally:
+        get_settings.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_self_desc_card_suppressed_by_default(monkeypatch):
+    """Casual deployment (DEFAULT): a self-description query injects no fact card —
+    the trained voice answers. The lane is still detected (so semantic facts are
+    not spuriously injected on a meta-question), but CORE is never loaded."""
+    from persona_rag.config import get_settings
+
+    fake_client = MagicMock()
+    fake_resp = MagicMock()
+    fake_resp.points = []
+    fake_client.query_points = MagicMock(return_value=fake_resp)
+    monkeypatch.setattr(
+        "persona_rag.graph.nodes.retrieve_insights.make_client", lambda: fake_client
+    )
+    monkeypatch.setattr(
+        "persona_rag.graph.nodes.retrieve_insights.classify_self_description",
+        lambda vec, anchors, threshold: True,
+    )
+    calls = {"n": 0}
+
+    def _spy_load(*, limit, query_lang):
+        calls["n"] += 1
+        return []
+
+    monkeypatch.setattr("persona_rag.graph.nodes.retrieve_insights.load_core_facts", _spy_load)
+    get_settings.cache_clear()
+    try:
+        with (
+            patch(
+                "persona_rag.graph.nodes.retrieve_insights.embed_batch",
+                AsyncMock(return_value=[[0.0] * 1536]),
+            ),
+            patch(
+                "persona_rag.graph.nodes.retrieve_insights.anchor_vecs",
+                AsyncMock(return_value=[[0.0] * 1536]),
+            ),
+        ):
+            out = await retrieve_insights(
+                {"user_id": 1, "chat_id": 1, "incoming": "розкажи про себе"}
+            )
+    finally:
+        get_settings.cache_clear()
     ins = out["insights"]
-    assert ins["lane"] == "self_desc"
-    assert ins["query_lang"] == "uk"
-    assert [c.subject for c in ins["core"]] == ["school"]
+    assert ins["lane"] == "self_desc"  # detected...
+    assert ins["core"] == []  # ...but no CORE card built (voice answers)
+    assert calls["n"] == 0  # load_core_facts not called when the card is disabled

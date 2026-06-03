@@ -207,6 +207,19 @@ thread `text_en` into the payload.
 
 ## 10. Phase 2 — Serving intent-router + language + card
 
+> **Amendment (b) — 2026-06-03 (casual deployment).** The self-description CORE
+> card is **OFF by default** (`INSIGHTS_SELFDESC_CARD_ENABLED=False`). On a casual
+> Telegram persona a vague "tell me about yourself" is answered by the trained
+> voice, not a fact sheet: a resume-flavored card there drags the register toward
+> generic (the exact failure the LoRA fights) and is where fabrication risk is
+> *lowest*. The `self_desc` lane is still **detected** — that keeps semantic
+> identity facts from leaking onto a meta-question — but CORE stays empty, so the
+> card is `None`. **Specific** questions are unchanged: they still retrieve facts,
+> which is where a wrong identity fact actually hurts. Flip the flag `True` to
+> restore the curated card for a professional/portfolio deployment. This
+> supersedes the CORE-card-on-`self_desc` behavior described below and makes the
+> category-diversity (round-robin) refinement moot.
+
 **New `persona_rag/generate/lang_detect.py`:** `detect_language(text) -> "uk"|"ru"|"en"`
 — Cyrillic vs Latin first; uk vs ru by distinctive chars (і/ї/є/ґ → uk). Tiny, dependency-free.
 
