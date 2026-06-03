@@ -203,6 +203,20 @@ def test_consolidate_is_idempotent_stable_ids():
     assert [f.id for f in a] == [f.id for f in b]
 
 
+def test_vault_id_namespaced_away_from_chat_collision():
+    """Regression (real-db bug): vault facts and chat insights BOTH hash
+    (category, subject) via _stable_insight_id, so without a namespace a vault
+    'bio/school' fact PK-collides with a chat-learned 'bio/school' insight
+    (SQLite IntegrityError; silent Qdrant overwrite). The vault id must differ,
+    while the stored subject stays clean."""
+    from persona_rag.insights.consolidator import _stable_insight_id, normalize_subject
+
+    chat_id = _stable_insight_id("bio", normalize_subject("school"))
+    (fact,) = consolidate_vault([_raw("bio", "school", "навч", "studies", 0.9)])
+    assert fact.id != chat_id  # namespaced -> coexists, no collision
+    assert fact.subject == "school"  # subject unchanged
+
+
 # --- Task 7: persist + wipe ---
 
 

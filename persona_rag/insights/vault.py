@@ -227,7 +227,13 @@ def consolidate_vault(raws: list[RawVaultFact]) -> list[VaultFact]:
         best = max(members, key=lambda r: r.confidence)
         out.append(
             VaultFact(
-                id=_stable_insight_id(category, canon),
+                # Namespace the vault id away from the chat-insights id space. BOTH
+                # pipelines hash (category, subject) via _stable_insight_id, so an
+                # un-namespaced vault "bio/school" fact PK-collides with a chat-learned
+                # "bio/school" insight: IntegrityError in SQLite, and a SILENT overwrite
+                # of the chat point in Qdrant. The "vault::" prefix only changes the id
+                # hash; the stored subject stays clean.
+                id=_stable_insight_id(category, f"vault::{canon}"),
                 category=category,
                 subject=canon,
                 text_uk=best.text_uk,
