@@ -124,7 +124,7 @@ def test_parse_vault_response_happy():
 
 def test_parse_vault_rejects_unknown_category_and_missing_uk():
     bad_cat = (
-        '{"facts": [{"category": "behavior", "subject": "x",' ' "text_uk": "a", "text_en": "b"}]}'
+        '{"facts": [{"category": "behavior", "subject": "x", "text_uk": "a", "text_en": "b"}]}'
     )
     assert parse_vault_response(bad_cat, source_file="f") == []
     # text_uk is required (the canonical); a fact missing it is dropped.
