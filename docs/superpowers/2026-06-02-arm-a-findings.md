@@ -71,14 +71,26 @@ Re-running the API arm with levers forced to 0/0 isolates what the rich prompt p
 
 So the API's no-`!` is **mostly the rich prompt** (0.65 → 0.033 — the few-shot examples and "match the examples" directives genuinely teach `!`-restraint); the shipped logit-bias supplies only the **final 0.03** nudge to zero. The tic-suppression is *largely earned by prompting*, not a pure hard-coded hack — a fairer reading than "the API only looks good because of the bias." Everything else is lever-insensitive (shape 0.034, `len_wasserstein` 7.24, opener_entropy 3.83), and the verdict is unchanged: shape a tie, **LoRA still wins length** (Δ 4.27, CI [2.5, 5.1]).
 
-## 6. Caveats
+## 6. Per-language breakdown (no new generation)
+
+Re-scoring `armA/pairs.jsonl` per script bucket (`scripts/score_by_language.py --name armA`):
+
+| lang | n | shape API/LoRA | len-EMD API/LoRA | length |
+|---|---|---|---|---|
+| cyrillic (uk/ru) | 261 (87%) | 0.027 / 0.036 | 5.3 / **1.8** | **LoRA** |
+| latin (en) | 27 (9%) | 0.199 / 0.188 | 27.1 / 19.4 | **tie** (small n) |
+| mixed / other | 8 / 4 | — | — | n too small |
+
+The aggregate verdict is essentially the **cyrillic** result (87% of the hold-out), where the LoRA clearly wins length. On **Latin/English it is a tie** — no API advantage (refuting the prior that gpt-4o-mini might win on English). Separate new finding: **both backends are markedly worse in English** (shape ~0.19 vs ~0.03; len-EMD ~20–27 vs ~2–5) — a *shared* weakness (English is a minority of the data), not a differentiator, worth future attention. Caveat: latin n=27, so the English read is low-confidence.
+
+## 7. Caveats
 
 - **Corpus-level, not within-item.** Arm A and arm B score the same hold-out *distribution* but not byte-identical item sets (arm B shuffles a no-id ShareGPT file; arm A loads id-bearing DB rows). Cross-arm deltas are aggregate, not paired. (Within-item alignment was deferred as a fragile nice-to-have.)
 - **Runtime-faithful query.** Retrieval + register/shape use `ctx[-1]` only (what the live bot sends, `chat.py:51`), with `ctx[:-1]` as session — not the joined context. Both arms replay the same `(incoming, session)`; each prompt builder consumes it as it really does.
 - **Replay gaps (logged in `results.params`):** `user_memory=""` (first-contact), `session` reconstructed from the item's own context, insights from time-of-run tables, `style_anchors.json` shared with prod.
 - **The human panel is the real verdict** for both arms.
 
-## 7. Reproduce
+## 8. Reproduce
 
 ```bash
 # Qdrant up (make up) + index built (make ingest) + llama-server serving the LoRA.
