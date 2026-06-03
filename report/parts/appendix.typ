@@ -1,28 +1,17 @@
 #pagebreak()
 = Appendices
 
-== A · Reproduce
+== A · Experimental configuration
 
-All runs are deterministic given the seed. From the repo root:
-
-```bash
-# Arm B (controlled), two seeds
-make compare                                              # n=300, seed 0 -> main
-uv run python scripts/compare_persona.py --n 150 --seed 1 --name seed1
-# Arm A (production) + its ablations
-make compare-arma                                         # shipped levers -> armA
-uv run python scripts/compare_persona_armA.py --n 300 --learned --name armA_learned
-uv run python scripts/compare_persona_armA.py --n 60 --leak-on --name armA_leakon
-# Per-item effect sizes + per-language + the report
-uv run python scripts/compute_effect_sizes.py --name main   # also: armA, armA_learned
-uv run python scripts/score_by_language.py --name armA
-bash report/build.sh                                      # figures + compile the PDF
-```
-
-Pinned parameters: temperature 0.8, `max_tokens` 200, 2000 bootstrap resamples;
-API `gpt-4o-mini`; LoRA Qwen2.5-3B served as GGUF `Q5_K_M` via `llama.cpp`; the
-hold-out is the recipient-stratified `eval_split_for`. (Known provenance gap: the
-adapter / quant / `llama.cpp` build hash is not stamped in the run record.)
+All runs are deterministic given the seed; the exact command sequence lives in the
+repository README, so it is not repeated here. The parameters that fix the
+experiment: temperature 0.8, `max_tokens` 200, and 2000 bootstrap resamples; the API
+backend is `gpt-4o-mini` and the local backend is Qwen2.5-3B served as a GGUF
+`Q5_K_M` adapter through `llama.cpp`. Both backends score the recipient-stratified,
+model-disjoint `eval_split_for` hold-out — $n = 300$ for the headline arms, $n = 150$
+for the seed-1 replication, and $n = 60$ for the leak ablations. Known provenance
+gap: the adapter, quantization, and `llama.cpp` build hash are not stamped in the run
+record — a reproducibility limitation on the local-model numbers.
 
 == B · Metric formulas
 
