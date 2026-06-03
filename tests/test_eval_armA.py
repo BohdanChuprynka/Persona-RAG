@@ -244,3 +244,48 @@ def test_armA_builds_rich_prompt_not_thin(monkeypatch) -> None:
     # Rich SYSTEM_TEMPLATE markers (absent from the one-line THIN_SYSTEM).
     assert "You are texting" in sys_text
     assert len(sys_text) > 200
+
+
+def test_gen_all_retries_then_succeeds(monkeypatch) -> None:
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path("scripts").resolve()))
+    import compare_persona as cp
+
+    calls = {"n": 0}
+
+    class _Client:
+        class chat:
+            class completions:
+                @staticmethod
+                async def create(**kwargs: object) -> object:
+                    calls["n"] += 1
+                    if calls["n"] < 3:
+                        raise RuntimeError("429 rate limit")
+                    return SimpleNamespace(
+                        choices=[
+                            SimpleNamespace(
+                                message=SimpleNamespace(content="ok"), finish_reason="stop"
+                            )
+                        ],
+                        usage=SimpleNamespace(prompt_tokens=1, completion_tokens=1),
+                    )
+
+    async def _no_sleep(_s: float) -> None:
+        return None
+
+    monkeypatch.setattr(cp.asyncio, "sleep", _no_sleep)
+    out = asyncio.run(
+        cp._gen_all(
+            _Client(),
+            "m",
+            [[{"role": "user", "content": "hi"}]],
+            temperature=0.8,
+            max_tokens=10,
+            concurrency=1,
+        )
+    )
+    assert out[0]["err"] is None
+    assert out[0]["text"] == "ok"
+    assert calls["n"] == 3  # failed twice, succeeded on the 3rd

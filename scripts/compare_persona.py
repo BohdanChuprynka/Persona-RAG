@@ -91,33 +91,47 @@ async def _gen_all(
 
     async def one(messages: list[dict[str, str]]) -> dict[str, Any]:
         async with sem:
-            t0 = time.perf_counter()
-            try:
-                kwargs: dict[str, Any] = {
-                    "model": model,
-                    "messages": cast(Any, messages),
-                    "temperature": temperature,
-                    "max_tokens": max_tokens,
-                }
-                if logit_bias:
-                    kwargs["logit_bias"] = logit_bias
-                r = await client.chat.completions.create(**kwargs)
-                dt = time.perf_counter() - t0
-                txt = r.choices[0].message.content or ""
-                u = r.usage
-                pt = u.prompt_tokens if u else 0
-                ct = u.completion_tokens if u else 0
-                fin = r.choices[0].finish_reason
-                return {"text": txt, "latency": dt, "in": pt, "out": ct, "finish": fin, "err": None}
-            except Exception as e:
-                return {
-                    "text": "",
-                    "latency": time.perf_counter() - t0,
-                    "in": 0,
-                    "out": 0,
-                    "finish": "error",
-                    "err": str(e)[:200],
-                }
+            kwargs: dict[str, Any] = {
+                "model": model,
+                "messages": cast(Any, messages),
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+            }
+            if logit_bias:
+                kwargs["logit_bias"] = logit_bias
+            # Retry with exponential backoff — rich prompts at scale hit the
+            # OpenAI TPM rate limit (429); a few backoffs let it recover.
+            last_err = ""
+            for attempt in range(4):
+                t0 = time.perf_counter()
+                try:
+                    r = await client.chat.completions.create(**kwargs)
+                    dt = time.perf_counter() - t0
+                    txt = r.choices[0].message.content or ""
+                    u = r.usage
+                    pt = u.prompt_tokens if u else 0
+                    ct = u.completion_tokens if u else 0
+                    fin = r.choices[0].finish_reason
+                    return {
+                        "text": txt,
+                        "latency": dt,
+                        "in": pt,
+                        "out": ct,
+                        "finish": fin,
+                        "err": None,
+                    }
+                except Exception as e:
+                    last_err = str(e)[:200]
+                    if attempt < 3:
+                        await asyncio.sleep(2**attempt)  # 1, 2, 4s
+            return {
+                "text": "",
+                "latency": 0.0,
+                "in": 0,
+                "out": 0,
+                "finish": "error",
+                "err": last_err,
+            }
 
     return await asyncio.gather(*(one(m) for m in messages_list))
 

@@ -22,6 +22,7 @@ import json
 import os
 import random
 import sys
+from collections import Counter
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -182,7 +183,7 @@ async def run(
         api_msgs,
         temperature=temperature,
         max_tokens=max_tokens,
-        concurrency=8,
+        concurrency=4,
         logit_bias=bias,
     )
     log.info("generating", backend="lora", model=s.OLLAMA_MODEL)
@@ -195,6 +196,11 @@ async def run(
         concurrency=4,
         logit_bias=None,
     )
+    api_errs = [r["err"] for r in api_res if r["err"]]
+    if api_errs:
+        log.warning(
+            "api_errors", n=len(api_errs), top=Counter(e[:60] for e in api_errs).most_common(3)
+        )
 
     real = [it.reply for it in items]
     gen_api = [r["text"] for r in api_res]
