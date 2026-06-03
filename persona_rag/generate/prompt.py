@@ -233,18 +233,39 @@ def build_fact_card(
     ins = insights or {}
     lane = ins.get("lane", "specific")
     query_lang = ins.get("query_lang", "uk")
-    parts: list[str] = []
-    if user_memory and user_memory.strip():
-        parts.append(user_memory.strip())
+
+    fact_rows: list[Any] = []
     if lane == "self_desc":
-        for r in ins.get("core", []):
-            parts.append(f"- {_render_fact(r, query_lang)}")
+        fact_rows = list(ins.get("core", []))
     elif lane == "specific":
-        for r in ins.get("semantic", []):
-            if getattr(r, "category", None) in IDENTITY_CATEGORIES:
-                parts.append(f"- {_render_fact(r, query_lang)}")
-    joined = "\n".join(parts).strip()
-    return joined[:cap] or None
+        fact_rows = [
+            r
+            for r in ins.get("semantic", [])
+            if getattr(r, "category", None) in IDENTITY_CATEGORIES
+        ]
+
+    lines: list[str] = []
+    used = 0
+
+    def _fits(s: str) -> bool:
+        return used + len(s) + (1 if lines else 0) <= cap
+
+    # Identity facts are budgeted FIRST, whole lines only — so a long contact memory
+    # can never evict them and a fact is never sliced mid-sentence at the cap.
+    for r in fact_rows:
+        line = f"- {_render_fact(r, query_lang)}"
+        if _fits(line):
+            used += len(line) + (1 if lines else 0)
+            lines.append(line)
+
+    # Contact memory fills any remaining space (whole, not partial).
+    if user_memory and user_memory.strip():
+        mem = user_memory.strip()
+        if _fits(mem):
+            used += len(mem) + (1 if lines else 0)
+            lines.append(mem)
+
+    return "\n".join(lines) or None
 
 
 def build_messages(

@@ -467,3 +467,64 @@ def test_persist_raws_empty_list_still_marks_session(tmp_path, monkeypatch):
     assert state is not None
     assert state.failed is False
     assert state.insights_count == 0
+
+
+@pytest.mark.asyncio
+async def test_chat_rerun_does_not_clobber_vault_row(tmp_path, monkeypatch):
+    """Task 8 / spec 2026-06-03 §7: a chat re-run that derives the same stable id
+    as a curated vault fact must NOT overwrite it. Both pipelines key the InsightRow
+    PK on (category, normalized subject), and categories {bio,opinion} overlap, so a
+    chat 'bio/school' insight collides with a vault 'bio/school' fact."""
+    db = str(tmp_path / "p.db")
+    make_engine(db)
+    monkeypatch.setattr("persona_rag.insights.persistence.make_engine", lambda: make_engine(db))
+    now = datetime.now(UTC)
+    with Session(make_engine(db)) as s:
+        s.add(
+            InsightRow(
+                id="shared",
+                category="bio",
+                subject="school",
+                text="VAULT TRUTH",
+                text_en="vault truth",
+                confidence=1.0,
+                evidence_count=1,
+                earliest_date=now,
+                latest_date=now,
+                trajectory=None,
+                source_session_ids="[]",
+                source="vault",
+                review_status="approved",
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        s.commit()
+    ci = ConsolidatedInsight(
+        id="shared",
+        category="bio",
+        canonical_subject="school",
+        text="CHAT GUESS",
+        confidence=0.5,
+        evidence_count=3,
+        earliest_date=now,
+        latest_date=now,
+        trajectory=None,
+        source_session_ids=["s1"],
+        distinct_partners=2,
+    )
+    with patch(
+        "persona_rag.insights.persistence.embed_batch",
+        AsyncMock(return_value=[[0.0] * 1536]),
+    ):
+        await persist_insights(
+            [ci],
+            statuses={"shared": "auto"},
+            qdrant_client=MagicMock(),
+            collection="self_insights",
+        )
+    with Session(make_engine(db)) as s:
+        row = s.exec(select(InsightRow).where(InsightRow.id == "shared")).one()
+    assert row.text == "VAULT TRUTH"
+    assert row.source == "vault"
+    assert row.review_status == "approved"

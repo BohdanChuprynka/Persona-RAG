@@ -106,9 +106,14 @@ insights-dry:
 insights-vault:
 	uv run python scripts/ingest_vault.py
 
-# Generation-level register-invariance A/B (open-Q#6). Needs llama-server up.
-# Runs the probe set facts-OFF then facts-ON; diff shape_js / paren_smiley / length.
+# Generation-level register-invariance A/B (open-Q#6) — NOT YET WIRED.
+# compare_persona.py builds prompts from the STATIC exported system turn and never
+# routes through build_messages / the fact router, so it cannot measure facts-on vs
+# facts-off (flipping OLLAMA_FACTS_IN_SYSTEM changes nothing). The current Tier-1 gate
+# is the construction-level test tests/eval/test_vault_register_invariance.py. Wiring a
+# real A/B (retrieve_insights + build_messages ollama, per probe, vs llama-server) is a
+# documented follow-on. Exits non-zero so it can never read as a passing gate.
 compare-vault:
-	OLLAMA_FACTS_IN_SYSTEM=false uv run python scripts/compare_persona.py --n 60 --seed 0 --name vault_off
-	OLLAMA_FACTS_IN_SYSTEM=true uv run python scripts/compare_persona.py --n 60 --seed 0 --name vault_on
-	@echo "Diff reports/vault_off vs reports/vault_on: shape_js/paren_smiley/length within noise; self-description fact-faithful."
+	@echo "compare-vault NOT YET WIRED — it would not measure facts-on vs facts-off." >&2
+	@echo "Tier-1 gate: tests/eval/test_vault_register_invariance.py. See REVIEW follow-on." >&2
+	@exit 1
