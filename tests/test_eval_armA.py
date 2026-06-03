@@ -4,14 +4,24 @@ from __future__ import annotations
 
 import asyncio
 import datetime as _dt
+import json
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+import pytest
 from qdrant_client.models import Filter, HasIdCondition
 
 import persona_rag.retrieval as retr
+from persona_rag.config import get_settings
 from persona_rag.eval.compare import LeakError, leak_guard
 from persona_rag.index.qdrant_store import search_dense
+
+
+@pytest.fixture(autouse=True)
+def _clear_settings_cache():
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
 
 
 # --- Task 1: dense exclude_ids -------------------------------------------------
@@ -178,3 +188,59 @@ def test_leak_guard_non_strict_counts_id_leak() -> None:
         gold_turn_id="gold", gold_reply="да", gold_ctx=["c"], retrieved=retrieved, strict=False
     )
     assert out["id_leak"] == 1
+
+
+# --- Task 6: arm-A runner ------------------------------------------------------
+def test_armA_load_holdout_keeps_ids(monkeypatch) -> None:
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path("scripts").resolve()))
+    import compare_persona_armA as a
+
+    class _Row:
+        def __init__(self, _id: str, reply: str, ctx: list[str]) -> None:
+            self.id = _id
+            self.your_reply = reply
+            self.incoming_context_json = json.dumps(ctx)
+            self.recipient_id_hash = "rh"
+            self.language = "en"
+            self.timestamp = _dt.datetime(2026, 1, 1)
+
+    rows = [_Row("keep-me", "a real reply here", ["hi", "how are you"])]
+
+    class _Sess:
+        def __enter__(self) -> _Sess:
+            return self
+
+        def __exit__(self, *x: object) -> bool:
+            return False
+
+        def exec(self, *_a: object) -> object:
+            return SimpleNamespace(all=lambda: rows)
+
+    monkeypatch.setattr(a, "Session", lambda e: _Sess())
+    monkeypatch.setattr(a, "make_engine", lambda: None)
+    monkeypatch.setattr(a, "eval_split_for", lambda _id, frac=0.1: True)
+
+    items = a.load_holdout(min_reply_chars=3)
+    assert items[0].turn_id == "keep-me"
+    assert items[0].ctx == ["hi", "how are you"]
+
+
+def test_armA_builds_rich_prompt_not_thin(monkeypatch) -> None:
+    import sys
+    from pathlib import Path
+
+    monkeypatch.setenv("GENERATION_BACKEND", "openai")
+    monkeypatch.setenv("INSIGHTS_USE_GENERATED_PERSONA_DESCRIPTION", "false")
+    get_settings.cache_clear()
+
+    sys.path.insert(0, str(Path("scripts").resolve()))
+    import compare_persona_armA as a
+
+    msgs = a.build_api_messages(ctx=["hi", "ok so"], retrieved=[], insights=None)
+    sys_text = next(m["content"] for m in msgs if m["role"] == "system")
+    # Rich SYSTEM_TEMPLATE markers (absent from the one-line THIN_SYSTEM).
+    assert "You are texting" in sys_text
+    assert len(sys_text) > 200
