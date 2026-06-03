@@ -3,36 +3,32 @@
 #canvas({
   import draw: *
   let stroke = 0.6pt + rgb("#475569")
-  let box(pos, size, body, fill: rgb("#eef2ff")) = {
-    let (x, y) = pos
-    let (w, h) = size
-    rect((x - w / 2, y - h / 2), (x + w / 2, y + h / 2), fill: fill, stroke: stroke, radius: 3pt)
-    content((x, y), text(7.5pt)[#body])
+  let node(name, pos, body, fill: rgb("#eef2ff"), w: auto, size: 7.5pt) = {
+    let inner = if w == auto { text(size, body) } else { box(width: w, align(center, text(size, body))) }
+    content(pos, inner, frame: "rect", fill: fill, stroke: stroke, padding: 6pt, name: name)
   }
   let arr(a, b) = line(a, b, mark: (end: ">"), stroke: stroke)
 
   // shared ingestion spine
-  box((5.5, 7.4), (6.5, 0.7), [Telegram / Instagram export])
-  box((5.5, 6.4), (8.2, 0.7), [PII redact → burst-collapse (300s) → session-split (6h, ≥4 turns)])
-  box((5.5, 5.4), (5.2, 0.7), [persona turns: (context → reply)], fill: rgb("#e0e7ff"))
-  arr((5.5, 7.05), (5.5, 6.75))
-  arr((5.5, 6.05), (5.5, 5.75))
+  node("exp", (5.5, 7.4), [Telegram / Instagram export])
+  node("prep", (5.5, 6.1), [PII redact → burst-collapse (300s) → session-split (6h, ≥4 turns)], w: 8.6cm, size: 7pt)
+  node("turns", (5.5, 4.9), [persona turns: (context → reply)], fill: rgb("#e0e7ff"))
+  arr("exp.south", "prep.north")
+  arr("prep.south", "turns.north")
 
-  // fork A — temporal split (the skewed one) drives the index
-  box((2.7, 4.0), (4.6, 0.85), [*fork A* · temporal `eval_split`\ (last 10% by time)], fill: rgb("#fef9c3"))
-  box((2.7, 2.7), (4.6, 0.7), [index: Qdrant + BM25], fill: rgb("#fef9c3"))
-  arr((4.6, 5.15), (2.9, 4.45))
-  arr((2.7, 3.575), (2.7, 3.05))
-  content((2.7, 1.75), text(6.5pt, fill: rgb("#b45309"))[register-skewed: 1 EN contact\ = 62% of Latin → 0.47 artifact])
+  // fork A — temporal split (skewed) drives the index
+  node("forkA", (2.6, 3.4), [*fork A* — temporal `eval_split`\ (last 10% by time)], fill: rgb("#fef9c3"), w: 4.4cm)
+  node("idxA", (2.6, 2.1), [index: Qdrant + BM25], fill: rgb("#fef9c3"))
+  arr("turns.south", "forkA.north")
+  arr("forkA.south", "idxA.north")
 
   // fork B — recipient-stratified split drives train/eval
-  box((8.3, 4.0), (4.6, 0.85), [*fork B* · recipient-stratified\ `eval_split_for` (hash)], fill: rgb("#dcfce7"))
-  box((8.3, 2.7), (4.6, 0.7), [train.jsonl / eval.jsonl (LoRA)], fill: rgb("#dcfce7"))
-  arr((6.4, 5.15), (8.1, 4.45))
-  arr((8.3, 3.575), (8.3, 3.05))
-  content((8.3, 1.95), text(6.5pt, fill: rgb("#15803d"))[train ≈ eval ≈ 0.18 Latin — honest, reachable target])
+  node("forkB", (8.4, 3.4), [*fork B* — recipient-stratified\ `eval_split_for` (hash)], fill: rgb("#dcfce7"), w: 4.4cm)
+  node("trainB", (8.4, 2.1), [train.jsonl / eval.jsonl (LoRA)], fill: rgb("#dcfce7"))
+  arr("turns.south", "forkB.north")
+  arr("forkB.south", "trainB.north")
 
-  // the leak the guard fixes
-  box((2.7, 0.85), (5.2, 0.75), [retrieval can return the held-out *gold reply* →\ *28% leak*, removed per-item by the guard], fill: rgb("#fee2e2"))
-  arr((2.7, 2.35), (2.7, 1.25))
+  // the leak the guard fixes — fed by the temporal index
+  node("leak", (5.3, 0.7), [retrieval can return the held-out *gold reply* → *28% leak*, removed per-item by the guard], fill: rgb("#fee2e2"), w: 6.0cm, size: 7pt)
+  arr("idxA.south", "leak.west")
 })

@@ -20,9 +20,9 @@ bash report/build.sh                                      # figures + compile th
 ```
 
 Pinned parameters: temperature 0.8, `max_tokens` 200, 2000 bootstrap resamples;
-API `gpt-4o-mini`; LoRA Qwen2.5-3B served as GGUF `Q5_K_M` via `llama.cpp`; hold-out
-= the recipient-stratified `eval_split_for`. (Known provenance gap: the adapter /
-quant / `llama.cpp` build hash is not stamped in the run record.)
+API `gpt-4o-mini`; LoRA Qwen2.5-3B served as GGUF `Q5_K_M` via `llama.cpp`; the
+hold-out is the recipient-stratified `eval_split_for`. (Known provenance gap: the
+adapter / quant / `llama.cpp` build hash is not stamped in the run record.)
 
 == B · Metric formulas
 
@@ -42,11 +42,11 @@ quant / `llama.cpp` build hash is not stamped in the run record.)
 #table(
   columns: 7,
   stroke: none,
-  inset: 5pt,
+  inset: (x: 7pt, y: 5pt),
   align: (left, center, right, right, right, right, right),
   table.hline(),
   table.header(
-    [run], [n], [`shape_js` A/L], [`len_w` A/L], [`excl` A/L], [Cliff δ], [\$/1k],
+    [Run], [n], [Shape A/L], [Length A/L], [Excl. A/L], [Cliff δ], [\$/1k],
   ),
   table.hline(stroke: 0.4pt),
   [main (B)], [300], [0.052 / 0.024], [128.8 / 2.9], [0.65 / 0.00], [0.949], [0.082],

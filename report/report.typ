@@ -11,6 +11,21 @@
 #show figure.caption: set text(9pt)
 #show link: set text(rgb("#2563eb"))
 
+// Monospace that pairs with New Computer Modern (NCM Mono is not installed on the
+// build host); the default mono falls back to a heavy sans that clashes with the serif.
+#show raw: set text(font: "PT Mono")
+// Block code reads as an intentional, framed artifact rather than raw terminal text.
+#show raw.where(block: true): it => block(
+  width: 100%,
+  fill: rgb("#f6f8fa"),
+  stroke: 0.5pt + rgb("#d0d7de"),
+  radius: 4pt,
+  inset: (x: 9pt, y: 8pt),
+  above: 1.0em,
+  below: 1.0em,
+  text(size: 8.5pt, it),
+)
+
 // ---- title block -------------------------------------------------------------
 #align(center)[
   #text(19pt, weight: "bold")[Replicating a Texting Voice]

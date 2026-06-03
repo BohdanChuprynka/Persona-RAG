@@ -3,28 +3,27 @@
 #canvas({
   import draw: *
   let stroke = 0.6pt + rgb("#475569")
-  let box(pos, size, body, fill: rgb("#eef2ff")) = {
-    let (x, y) = pos
-    let (w, h) = size
-    rect((x - w / 2, y - h / 2), (x + w / 2, y + h / 2), fill: fill, stroke: stroke, radius: 3pt)
-    content((x, y), text(7.5pt)[#body])
+  let node(name, pos, body, fill: rgb("#eef2ff"), w: auto, size: 7.5pt) = {
+    let inner = if w == auto { text(size, body) } else { box(width: w, align(center, text(size, body))) }
+    content(pos, inner, frame: "rect", fill: fill, stroke: stroke, padding: 6pt, name: name)
   }
   let arr(a, b) = line(a, b, mark: (end: ">"), stroke: stroke)
+  let darr(a, b) = line(a, b, mark: (end: ">"), stroke: (paint: rgb("#b45309"), dash: "dashed", thickness: 0.7pt))
 
-  // training (left) -> merge -> local quantize -> GGUF -> serve (right)
-  box((2.1, 5.4), (3.6, 1.15), [*train* (Colab T4)\ Qwen2.5-3B · 4-bit\ QLoRA r=32 / α=64\ train\_on\_responses\_only], fill: rgb("#dcfce7"))
-  box((5.2, 5.4), (2.4, 0.7), [merge 16-bit])
-  box((8.2, 5.4), (3.4, 0.95), [local · convert\_hf\_to\_gguf\ + llama-quantize], fill: rgb("#dbeafe"))
-  box((10.9, 3.9), (2.6, 0.7), [GGUF *Q5\_K\_M*], fill: rgb("#dbeafe"))
-  box((10.9, 2.6), (2.6, 0.7), [*serve* · llama-server], fill: rgb("#dbeafe"))
-  arr((3.9, 5.4), (4.0, 5.4))
-  arr((6.4, 5.4), (6.5, 5.4))
-  arr((9.4, 4.92), (10.6, 4.25))
-  arr((10.9, 3.55), (10.9, 2.95))
+  // train (left) -> merge -> local quantize, then down to GGUF -> serve (right)
+  node("train", (2.0, 6.0), [*train* (Colab T4)\ Qwen2.5-3B · 4-bit\ QLoRA r=32 / α=64\ train\_on\_responses\_only], fill: rgb("#dcfce7"))
+  node("merge", (5.5, 6.0), [merge 16-bit])
+  node("conv", (9.1, 6.0), [local — convert\_hf\_to\_gguf\ + llama-quantize], fill: rgb("#dbeafe"))
+  node("gguf", (9.1, 4.3), [GGUF *Q5\_K\_M*], fill: rgb("#dbeafe"))
+  node("serve", (9.1, 3.0), [*serve* — llama-server], fill: rgb("#dbeafe"))
+  arr("train.east", "merge.west")
+  arr("merge.east", "conv.west")
+  arr("conv.south", "gguf.north")
+  arr("gguf.south", "serve.north")
 
-  // the THIN_SYSTEM invariant: one string into BOTH train and serve
-  box((5.5, 1.4), (6.8, 0.8), [*`THIN_SYSTEM`* — one Ukrainian persona anchor,\ the byte-identical string used in BOTH train and serve], fill: rgb("#fef9c3"))
-  arr((4.0, 1.8), (2.1, 4.82))
-  arr((7.5, 1.6), (10.4, 2.42))
-  content((5.5, 0.6), text(7pt, fill: rgb("#b45309"))[train == serve invariant])
+  // the THIN_SYSTEM invariant: one string fed byte-identically into BOTH train and serve
+  node("thin", (3.6, 1.0), [*`THIN_SYSTEM`* — one Ukrainian persona anchor,\ the byte-identical string used in BOTH train and serve], fill: rgb("#fef9c3"), w: 6.6cm, size: 7pt)
+  darr("thin.north-west", "train.south")
+  darr("thin.north-east", "serve.west")
+  content((3.6, 0.05), text(6.8pt, fill: rgb("#b45309"))[train == serve invariant])
 })

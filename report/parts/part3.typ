@@ -15,21 +15,22 @@ result replicates across two seeds (@tab-armB, @fig-armB).
   table(
     columns: 5,
     stroke: none,
-    inset: 5pt,
+    inset: (x: 7pt, y: 5pt),
     align: (left, right, right, left, center),
     table.hline(),
-    table.header([metric (↓ closer)], [API], [LoRA], [Δ (95% CI)], [verdict]),
+    table.header([Metric], [API], [LoRA], [Δ (95% CI)], [verdict]),
     table.hline(stroke: 0.4pt),
-    [`shape_js`], [0.052], [0.024], [+0.028 (-0.014, 0.073)], [tie],
-    [`len_wasserstein`], [128.8], [*2.9*], [+125.9 (107.6, 142.4)], [*LoRA*],
-    [`exclaim_rate`], [0.651], [0.000], [—], [descr.],
-    [`opener_entropy` (↑)], [5.02], [5.77], [—], [descr.],
-    [cost / 1k replies], [\$0.082], [*\$0*], [—], [LoRA],
+    [Message shape (JS, ↓)], [0.052], [0.024], [+0.028 (-0.014, 0.073)], [tie],
+    [Reply length ($W_1$, ↓)], [128.8], [*2.9*], [+125.9 (107.6, 142.4)], [*LoRA*],
+    [Exclamation rate (↓)], [0.651], [0.000], [—], [descr.],
+    [Opener entropy (↑)], [5.02], [5.77], [—], [descr.],
+    [Cost / 1k replies], [\$0.082], [*\$0*], [—], [LoRA],
     table.hline(),
   ),
   caption: [Arm B (controlled), $n = 300$, replicated at $n = 150$ seed 1. Identical
-  thin prompt to both backends. The length win is large and its CI excludes zero in
-  both seeds.],
+  thin prompt to both backends. Arrows mark the better direction (↓ closer to the
+  person, ↑ more varied). The length win is large and its CI excludes zero in both
+  seeds.],
 ) <tab-armB>
 
 #figure(
@@ -49,17 +50,17 @@ variety, at zero cost.
   table(
     columns: 5,
     stroke: none,
-    inset: 5pt,
+    inset: (x: 7pt, y: 5pt),
     align: (left, right, right, left, center),
     table.hline(),
-    table.header([metric (↓ closer)], [API], [LoRA], [Δ (95% CI)], [verdict]),
+    table.header([Metric], [API], [LoRA], [Δ (95% CI)], [verdict]),
     table.hline(stroke: 0.4pt),
-    [`shape_js`], [0.0353], [0.0339], [+0.001 (-0.040, 0.040)], [tie],
-    [`len_wasserstein`], [6.97], [3.41], [+3.57 (1.53, 4.66)], [distrib.#super[†]],
-    [`exclaim_rate`], [0.000], [0.000], [—], [tie],
-    [`opener_entropy` (↑)], [3.70], [5.76], [—], [descr.],
-    [cost / 1k replies], [\$0.37], [*\$0*], [—], [LoRA],
-    [p50 latency], [0.96s], [1.01s], [—], [\~tie],
+    [Message shape (JS, ↓)], [0.0353], [0.0339], [+0.001 (-0.040, 0.040)], [tie],
+    [Reply length ($W_1$, ↓)], [6.97], [3.41], [+3.57 (1.53, 4.66)], [distrib.#super[†]],
+    [Exclamation rate (↓)], [0.000], [0.000], [—], [tie],
+    [Opener entropy (↑)], [3.70], [5.76], [—], [descr.],
+    [Cost / 1k replies], [\$0.37], [*\$0*], [—], [LoRA],
+    [Latency (p50)], [0.96s], [1.01s], [—], [\~tie],
     table.hline(),
   ),
   caption: [Arm A (production), $n = 300$, leak guard active (`id_leaks` = 0). The
