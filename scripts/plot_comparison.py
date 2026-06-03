@@ -69,18 +69,27 @@ def _tics(texts: list[str]) -> dict[str, float]:
 def _fig_headline(results: dict[str, Any], out: Path) -> None:
     arms = results["scorecard"]["arms"]
     d = results["scorecard"]["deltas_api_minus_lora"]
-    metrics = [("shape_js_vs_real", "shape_js"), ("len_wasserstein_vs_real", "len_wasserstein")]
-    fig, axes = plt.subplots(1, 2, figsize=(10, 4.2))
-    for ax, (key, short) in zip(axes, metrics, strict=True):
+    metrics = [
+        ("shape_js_vs_real", "messages per reply", "shape_js"),
+        ("len_wasserstein_vs_real", "reply length", "len_wasserstein"),
+    ]
+    favored_label = {"a": "API is closer", "b": "LoRA is closer"}
+    fig, axes = plt.subplots(1, 2, figsize=(9, 4.2))
+    for ax, (key, plain, metric) in zip(axes, metrics, strict=True):
         vals = [arms["api"][key], arms["lora"][key]]
-        bars = ax.bar(["API\n(gpt-4o-mini)", "LoRA\n(Qwen2.5-3B)"], vals, color=[API_C, LORA_C])
-        ax.set_title(f"{short} - distance to Bohdan (lower = closer)")
+        bars = ax.bar(["API", "LoRA"], vals, color=[API_C, LORA_C])
         ax.bar_label(bars, fmt="%.3f", padding=3)
-        dd = d[short]
-        verdict = dd["favored"] if dd["excludes_zero"] else "tie (CI spans 0)"
-        lbl = f"d(api-lora)={dd['delta']:.3f}  CI[{dd['ci_lo']:.3f},{dd['ci_hi']:.3f}] -> {verdict}"
-        ax.set_xlabel(lbl)
-    fig.suptitle(f"Controlled A/B (identical thin prompt) - n={results['scorecard']['n_items']}")
+        # Headroom only: bars stay zero-based + proportional (honest), the top
+        # value label just isn't jammed against the frame.
+        ax.set_ylim(0, max(vals) * 1.2)
+        ax.set_title(f"{plain}\n({metric})")
+        for spine in ("top", "right"):
+            ax.spines[spine].set_visible(False)
+        dd = d[metric]
+        verdict = favored_label[dd["favored"]] if dd["excludes_zero"] else "too close to call"
+        ax.set_xlabel(f"{verdict}\n95% CI [{dd['ci_lo']:.3f}, {dd['ci_hi']:.3f}]")
+    n = results["scorecard"]["n_items"]
+    fig.suptitle(f"Same minimal prompt for both models, n={n}   (shorter bar = more like Bohdan)")
     fig.tight_layout()
     fig.savefig(out / "headline_distances.png", dpi=130)
     plt.close(fig)
@@ -89,16 +98,27 @@ def _fig_headline(results: dict[str, Any], out: Path) -> None:
 def _fig_tics(cols: dict[str, list[str]], out: Path) -> None:
     t = {k: _tics(v) for k, v in cols.items()}
     keys = ["latin_script_rate", "paren_smiley_rate", "exclaim_rate", "opener_top_share"]
+    nice = [
+        "Latin script\n(a-z)",
+        'smiley\n( ")" )',
+        'exclamations\n( "!" )',
+        "same opener\n(repeats 1st word)",
+    ]
     x = range(len(keys))
     w = 0.27
-    fig, ax = plt.subplots(figsize=(10, 4.5))
-    ax.bar([i - w for i in x], [t["real"][k] for k in keys], w, label="real (Bohdan)", color=REAL_C)
+    fig, ax = plt.subplots(figsize=(10, 4.8))
+    vals_all = [t[g][k] for g in ("real", "api", "lora") for k in keys]
+    ax.bar([i - w for i in x], [t["real"][k] for k in keys], w, label="you (Bohdan)", color=REAL_C)
     ax.bar(list(x), [t["api"][k] for k in keys], w, label="API", color=API_C)
     ax.bar([i + w for i in x], [t["lora"][k] for k in keys], w, label="LoRA", color=LORA_C)
     ax.set_xticks(list(x))
-    ax.set_xticklabels(keys, rotation=15)
-    ax.set_title("Voice tics vs the real reference (closer to gray = better)")
-    ax.legend()
+    ax.set_xticklabels(nice, rotation=0)
+    ax.set_ylim(0, max(vals_all) * 1.25)
+    ax.set_ylabel("how often (0 to 1)")
+    ax.set_title("Writing habits: closer to gray (you) = more like you")
+    for spine in ("top", "right"):
+        ax.spines[spine].set_visible(False)
+    ax.legend(loc="upper right")
     fig.tight_layout()
     fig.savefig(out / "voice_tics.png", dpi=130)
     plt.close(fig)
@@ -107,18 +127,30 @@ def _fig_tics(cols: dict[str, list[str]], out: Path) -> None:
 def _fig_shape(cols: dict[str, list[str]], out: Path) -> None:
     hists = {k: shape_histogram(v) for k, v in cols.items()}
     buckets = sorted(hists["real"].keys())
+    top = max(buckets)
+    labels = [f"{b}+" if b == top else str(b) for b in buckets]
     x = range(len(buckets))
     w = 0.27
-    fig, ax = plt.subplots(figsize=(9, 4.2))
-    ax.bar([i - w for i in x], [hists["real"][b] for b in buckets], w, label="real", color=REAL_C)
+    fig, ax = plt.subplots(figsize=(9, 4.4))
+    vals_all = [hists[k][b] for k in ("real", "api", "lora") for b in buckets]
+    ax.bar(
+        [i - w for i in x],
+        [hists["real"][b] for b in buckets],
+        w,
+        label="you (Bohdan)",
+        color=REAL_C,
+    )
     ax.bar(list(x), [hists["api"][b] for b in buckets], w, label="API", color=API_C)
     ax.bar([i + w for i in x], [hists["lora"][b] for b in buckets], w, label="LoRA", color=LORA_C)
     ax.set_xticks(list(x))
-    ax.set_xticklabels([str(b) for b in buckets])
-    ax.set_xlabel("bubbles per reply")
+    ax.set_xticklabels(labels)
+    ax.set_ylim(0, max(vals_all) * 1.15)
+    ax.set_xlabel("number of separate messages sent per reply")
     ax.set_ylabel("share of replies")
-    ax.set_title("Message-shape distribution (Telegram bubbles per reply)")
-    ax.legend()
+    ax.set_title("How many separate texts you send per reply")
+    for spine in ("top", "right"):
+        ax.spines[spine].set_visible(False)
+    ax.legend(loc="upper right")
     fig.tight_layout()
     fig.savefig(out / "shape_distribution.png", dpi=130)
     plt.close(fig)
@@ -126,14 +158,17 @@ def _fig_shape(cols: dict[str, list[str]], out: Path) -> None:
 
 def _fig_lengths(cols: dict[str, list[str]], out: Path) -> None:
     clip = 160
-    fig, ax = plt.subplots(figsize=(9, 4.2))
+    nice = {"real": "you (Bohdan)", "api": "API", "lora": "LoRA"}
+    fig, ax = plt.subplots(figsize=(9, 4.4))
     for k, c in (("real", REAL_C), ("api", API_C), ("lora", LORA_C)):
         lens = [min(x, clip) for x in per_bubble_lengths(cols[k])]
-        ax.hist(lens, bins=24, density=True, histtype="step", linewidth=2, label=k, color=c)
-    ax.set_xlabel(f"per-bubble length (chars, clipped at {clip})")
-    ax.set_ylabel("density")
-    ax.set_title("Per-bubble length distribution")
-    ax.legend()
+        ax.hist(lens, bins=24, density=True, histtype="step", linewidth=2, label=nice[k], color=c)
+    ax.set_xlabel(f"length of each message (characters, capped at {clip})")
+    ax.set_ylabel("how common")
+    ax.set_title("How long each message is")
+    for spine in ("top", "right"):
+        ax.spines[spine].set_visible(False)
+    ax.legend(loc="upper right")
     fig.tight_layout()
     fig.savefig(out / "length_distribution.png", dpi=130)
     plt.close(fig)
@@ -142,7 +177,7 @@ def _fig_lengths(cols: dict[str, list[str]], out: Path) -> None:
 def _fig_ops(results: dict[str, Any], out: Path) -> None:
     op = results["operational"]
     fig, ax = plt.subplots(figsize=(8, 4.2))
-    labels = ["API p50", "API p95", "LoRA p50", "LoRA p95"]
+    labels = ["API\ntypical", "API\nslowest 5%", "LoRA\ntypical", "LoRA\nslowest 5%"]
     vals = [
         op["api"]["p50_latency_s"],
         op["api"]["p95_latency_s"],
@@ -151,9 +186,12 @@ def _fig_ops(results: dict[str, Any], out: Path) -> None:
     ]
     bars = ax.bar(labels, vals, color=[API_C, API_C, LORA_C, LORA_C])
     ax.bar_label(bars, fmt="%.2fs", padding=3)
-    ax.set_ylabel("latency (s)")
+    ax.set_ylim(0, max(vals) * 1.15)
+    ax.set_ylabel("seconds per reply")
+    for spine in ("top", "right"):
+        ax.spines[spine].set_visible(False)
     cost = op["api"].get("usd_per_1k_replies", "?")
-    ax.set_title(f"Latency - API ${cost}/1k replies vs LoRA $0 (local)")
+    ax.set_title(f"Speed per reply  (API costs \\${cost} per 1,000 replies, LoRA is free)")
     fig.tight_layout()
     fig.savefig(out / "latency_cost.png", dpi=130)
     plt.close(fig)
