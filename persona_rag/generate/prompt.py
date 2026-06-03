@@ -6,6 +6,7 @@ from typing import Any
 
 from persona_rag.config import get_settings
 from persona_rag.generate.bubbles import target_bubbles
+from persona_rag.generate.fact_router import IDENTITY_CATEGORIES
 from persona_rag.generate.persona import THIN_SYSTEM
 from persona_rag.generate.register import detect_register
 from persona_rag.insights.persona_description import generate_persona_description
@@ -213,18 +214,35 @@ def build_thin_messages(
     ]
 
 
-def _compact_facts(
-    user_memory: str, insights: dict[str, Any] | None, *, cap: int = 400
+def _render_fact(r: Any, query_lang: str) -> str:
+    """Pick the fact text in the query's language (en uses text_en when present)."""
+    text = getattr(r, "text_en", None) if query_lang == "en" else None
+    return str(text or getattr(r, "text", ""))
+
+
+def build_fact_card(
+    incoming: str, user_memory: str, insights: dict[str, Any] | None, *, cap: int = 400
 ) -> str | None:
-    """A SHORT facts addendum for the thin LoRA path (opt-in via
-    ``OLLAMA_FACTS_IN_SYSTEM``). Contact memory + bio insights only, capped —
-    never the full insights block (which would re-introduce the skew)."""
+    """Lane + language-aware fact card for the thin LoRA path (spec 2026-06-03).
+
+    self_desc -> curated CORE identity facts (by route); specific -> identity-
+    category semantic hits; none -> nothing. Rendered in the query language and
+    capped. The system turn is never in training loss, so a brief in-language
+    addendum is a mild conditioning shift, never the full insights block.
+    """
+    ins = insights or {}
+    lane = ins.get("lane", "specific")
+    query_lang = ins.get("query_lang", "uk")
     parts: list[str] = []
     if user_memory and user_memory.strip():
         parts.append(user_memory.strip())
-    for r in (insights or {}).get("semantic", []):
-        if getattr(r, "category", None) == "bio":
-            parts.append(f"- {r.text}")
+    if lane == "self_desc":
+        for r in ins.get("core", []):
+            parts.append(f"- {_render_fact(r, query_lang)}")
+    elif lane == "specific":
+        for r in ins.get("semantic", []):
+            if getattr(r, "category", None) in IDENTITY_CATEGORIES:
+                parts.append(f"- {_render_fact(r, query_lang)}")
     joined = "\n".join(parts).strip()
     return joined[:cap] or None
 
@@ -246,7 +264,9 @@ def build_messages(
     # audit's dominant finding — it drags the small model back to its generic
     # instruct register and undoes the fine-tune.
     if s.GENERATION_BACKEND == "ollama":
-        facts = _compact_facts(user_memory, insights) if s.OLLAMA_FACTS_IN_SYSTEM else None
+        facts = (
+            build_fact_card(incoming, user_memory, insights) if s.OLLAMA_FACTS_IN_SYSTEM else None
+        )
         return build_thin_messages(incoming=incoming, session=session, facts=facts)
     # Generated persona description fallback
     if s.INSIGHTS_USE_GENERATED_PERSONA_DESCRIPTION:

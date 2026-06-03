@@ -12,10 +12,16 @@ from persona_rag._logging import get_logger
 from persona_rag.config import get_settings
 from persona_rag.db.engine import make_engine
 from persona_rag.db.models import AlgoSignal
+from persona_rag.generate.fact_router import (
+    anchor_vecs,
+    classify_self_description,
+    load_core_facts,
+)
+from persona_rag.generate.lang_detect import detect_language
 from persona_rag.graph.state import GraphState
 from persona_rag.index.embedder import embed_batch
 from persona_rag.index.qdrant_store import make_client
-from persona_rag.insights.recency import from_qdrant_point, rerank_with_recency
+from persona_rag.insights.recency import RankedInsight, from_qdrant_point, rerank_with_recency
 
 log = get_logger()
 
@@ -56,15 +62,49 @@ async def retrieve_insights(state: GraphState) -> GraphState:
             if s.INSIGHTS_STATIC_PATTERNS_ENABLED
             else {}
         )
-        state["insights"] = {"semantic": semantic, "static": static}
+        # Intent router (spec 2026-06-03): self-description queries get a curated
+        # CORE by route (not similarity); specific questions use the semantic hits;
+        # everything else gets nothing. Reuses the embedding computed above.
+        query_lang = detect_language(state["incoming"])
+        lane = "specific"
+        core: list[RankedInsight] = []
+        if s.INSIGHTS_FACTS_ROUTER_ENABLED:
+            # A classifier/CORE failure must NOT sink the semantic retrieval below;
+            # degrade to the default "specific" lane.
+            try:
+                avs = await anchor_vecs()
+                if classify_self_description(
+                    vec, avs, threshold=s.INSIGHTS_SELFDESC_ANCHOR_THRESHOLD
+                ):
+                    lane = "self_desc"
+                    core = load_core_facts(limit=s.INSIGHTS_CORE_MAX_FACTS, query_lang=query_lang)
+                elif not semantic:
+                    lane = "none"
+            except Exception as e:
+                log.warning("insights_router_failed", error=str(e))
+        state["insights"] = {
+            "semantic": semantic,
+            "static": static,
+            "lane": lane,
+            "core": core,
+            "query_lang": query_lang,
+        }
         log.info(
             "insights_retrieved",
             n_semantic=len(semantic),
+            lane=lane,
+            query_lang=query_lang,
             top_subjects=[r.subject for r in semantic],
         )
     except Exception as e:
         log.warning("insights_retrieval_failed", error=str(e))
-        state["insights"] = {"semantic": [], "static": {}}
+        state["insights"] = {
+            "semantic": [],
+            "static": {},
+            "lane": "none",
+            "core": [],
+            "query_lang": "uk",
+        }
     return state
 
 

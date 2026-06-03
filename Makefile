@@ -91,7 +91,7 @@ clean:
 	rm -rf .pytest_cache .ruff_cache .mypy_cache build dist *.egg-info
 	find . -type d -name __pycache__ -exec rm -rf {} +
 
-.PHONY: insights insights-full insights-dry insights-vault
+.PHONY: insights insights-full insights-dry insights-vault compare-vault
 
 insights:
 	uv run python scripts/distill_insights.py --mode incremental
@@ -105,3 +105,10 @@ insights-dry:
 # Vault fact ingestion (spec 2026-06-03): full-rebuild from data/raw/vault/.
 insights-vault:
 	uv run python scripts/ingest_vault.py
+
+# Generation-level register-invariance A/B (open-Q#6). Needs llama-server up.
+# Runs the probe set facts-OFF then facts-ON; diff shape_js / paren_smiley / length.
+compare-vault:
+	OLLAMA_FACTS_IN_SYSTEM=false uv run python scripts/compare_persona.py --n 60 --seed 0 --name vault_off
+	OLLAMA_FACTS_IN_SYSTEM=true uv run python scripts/compare_persona.py --n 60 --seed 0 --name vault_on
+	@echo "Diff reports/vault_off vs reports/vault_on: shape_js/paren_smiley/length within noise; self-description fact-faithful."
