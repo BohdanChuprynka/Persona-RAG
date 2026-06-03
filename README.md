@@ -12,7 +12,7 @@ Persona-RAG is a LangGraph-orchestrated retrieval-augmented Telegram bot that re
 
 - **Persona transfer without fine-tuning.** Retrieved past replies act as few-shot examples, so a base model (`gpt-4o-mini` by default) speaks in your register without an SFT run.
 - **Runtime backend swap.** The `--local` flag points the generate node at a locally-served fine-tuned LoRA through Ollama's OpenAI-compatible API instead of OpenAI. The adapter trains on a thin prompt shape and serves under that exact shape, so train equals serve byte-for-byte (`THIN_SYSTEM` in `persona_rag/generate/persona.py` is imported by both the export and the serving path).
-- **Distributional voice evaluation.** `scripts/eval_persona.py` scores stylometric distance against your real replies (script mix, opener variety, per-bubble length, paren-smiley rate). It deliberately avoids BLEU and ROUGE, which measure n-gram overlap and miss persona.
+- **Distributional voice evaluation.** `scripts/eval_persona.py` scores the distance between your real replies and the bot's across stylometric distributions: message shape, per-bubble length, opener variety, script mix, and paren-smiley rate.
 - **Hybrid retrieval.** Dense vectors plus BM25, fused and then reranked with Maximal Marginal Relevance (MMR) and recency decay. Config keys: `HYBRID_DENSE_ALPHA`, `MMR_ENABLED`, `MMR_LAMBDA`, `RECENCY_HALF_LIFE_DAYS`, `HYBRID_SCORE_FLOOR`.
 - **Cost-bounded self-insights pipeline.** A multi-stage extract-verify-consolidate pass distills durable facts about you from your history, gated by an evidence threshold, a distinct-partner check, and a hard USD budget cap (`INSIGHTS_BUDGET_HARD_CAP_USD`).
 - **Engineering hygiene.** 72 Python test files, `ruff` lint and format, `mypy --strict`, pre-commit hooks, and a docker-compose stack for Qdrant and MLflow.
@@ -25,43 +25,39 @@ A LangGraph state machine handles every incoming message: auth check (whitelist 
 %% C4 Level 1: System Context for Persona-RAG
 %% Standard Mermaid flowchart (renders on GitHub; NOT the C4Context dialect).
 flowchart TD
-    subgraph People[People]
-        Owner[Owner / Admin<br/>ADMIN_TELEGRAM_ID<br/>approves or blocks users, runs admin commands]
-        Chatter[Approved Chatter<br/>whitelisted friend<br/>chats with the persona]
-        Unauth[Unauthorized User<br/>not whitelisted<br/>routed to admin approval]
-        Reviewer[Reviewer<br/>via Streamlit demo UI<br/>pastes messages, inspects replies]
+    subgraph People
+        Owner[Owner / Admin<br/>ADMIN_TELEGRAM_ID]
+        Chatter[Approved Chatter<br/>whitelisted friend]
+        Unauth[Unauthorized User<br/>routed to approval]
+        Reviewer[Reviewer<br/>Streamlit demo UI]
     end
 
-    Core(["<b>Persona-RAG</b><br/>aiogram 3 bot + LangGraph state machine<br/>auth, hybrid retrieval, RAG generation,<br/>guard, per-user memory, shadow log"])
+    Core(["Persona-RAG<br/>aiogram 3 + LangGraph<br/>auth · retrieval · generation<br/>guard · memory · shadow log"])
 
-    subgraph External[External Systems]
-        TG[Telegram Bot API<br/>optional / one surface]
-        OpenAI[OpenAI API<br/>required default]
-        Ollama[Ollama<br/>optional local LoRA backend]
-        Colab[Google Colab + Drive<br/>optional LoRA training]
+    subgraph External["External Systems"]
+        TG[Telegram Bot API]
+        OpenAI[OpenAI<br/>gpt-4o-mini · embeddings]
+        Ollama[Ollama<br/>optional local LoRA]
+        Colab[Colab + Drive<br/>optional training]
         LangSmith[LangSmith<br/>optional tracing]
     end
 
-    %% People -> System
-    Owner -->|approve / block via DM,<br/>admin commands| Core
-    Chatter -->|DMs the bot| Core
-    Unauth -->|first DM triggers<br/>approval flow| Core
-    Reviewer -->|paste message,<br/>localhost:8501| Core
+    Owner -->|admin commands| Core
+    Chatter -->|DMs| Core
+    Unauth -->|first DM| Core
+    Reviewer -->|paste msg| Core
 
-    %% System <-> External
-    Core <-->|receive updates,<br/>send replies via TELEGRAM_BOT_TOKEN| TG
-    Core <-->|embeddings text-embedding-3-small,<br/>chat gpt-4o-mini| OpenAI
-    Core <-->|chat completions vs served LoRA<br/>when GENERATION_BACKEND=ollama| Ollama
-    Colab -.->|trains adapter, exports<br/>GGUF/Modelfile for Ollama| Ollama
-    Core -.->|per-node run traces<br/>when LANGCHAIN_TRACING_V2| LangSmith
+    Core <-->|send / receive| TG
+    Core <-->|chat + embeddings| OpenAI
+    Core <-->|served LoRA| Ollama
+    Colab -.->|exports GGUF| Ollama
+    Core -.->|traces| LangSmith
 
     classDef person fill:#dbeafe,stroke:#1e40af,color:#0b1f4d;
-    classDef system fill:#dcfce7,stroke:#15803d,color:#052e16;
     classDef ext fill:#fef3c7,stroke:#b45309,color:#451a03;
-
     class Owner,Chatter,Unauth,Reviewer person;
-    class Core system;
     class TG,OpenAI,Ollama,Colab,LangSmith ext;
+    style Core fill:#a7f3d0,stroke:#047857,stroke-width:3px,color:#052e16
 ```
 
 ## Quickstart
@@ -123,7 +119,7 @@ make run-local                                       # serve a local LoRA via Ol
 | [`docs/DATA-PIPELINE.md`](docs/DATA-PIPELINE.md) | Ingest spec: parsers, PII redaction, conversation grouping, turn extraction, Qdrant and SQLite schema |
 | [`docs/INSIGHTS.md`](docs/INSIGHTS.md) | Self-insights distillation: stages A–F, the verify gate, routing thresholds, and how insights reach the prompt |
 | [`docs/AUTH-FLOW.md`](docs/AUTH-FLOW.md) | Owner-admin gated whitelist state machine, onboarding buffer, admin command set |
-| [`docs/EVAL.md`](docs/EVAL.md) | Distributional stylometry over BLEU/ROUGE, held-out splits, authorship cosine, shadow-mode A/B |
+| [`docs/EVAL.md`](docs/EVAL.md) | Distributional stylometry, held-out splits, authorship cosine, shadow-mode A/B |
 | [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) | Minimal `.env` to boot plus the full `Settings` reference grouped by subsystem |
 | [`docs/OBSERVABILITY.md`](docs/OBSERVABILITY.md) | structlog conventions, LangSmith tracing, MLflow eval tracking, compose ports |
 | [`docs/finetune/README.md`](docs/finetune/README.md) | Free-Colab LoRA kit, the train-equals-serve rule, the honest register target, Ollama serving |

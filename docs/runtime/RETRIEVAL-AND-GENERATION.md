@@ -22,9 +22,9 @@ flowchart TD
     RetrieveHybrid --> LoadMem
     LoadMem --> RetrieveInsights[retrieve_insights]
     RetrieveInsights --> LoadSession[load_session]
-    LoadSession --> BuildPrompt[build_prompt<br/>cacheable prefix]
+    LoadSession --> BuildPrompt[build_prompt<br/>THIN_SYSTEM + few-shot]
     BuildPrompt --> OpenAIChat[openai_chat]
-    OpenAIChat --> Guardrails[guardrails<br/>PII / length / refuse-list]
+    OpenAIChat --> Guardrails[guardrails<br/>PII / length cap / REDACTED gate]
 
     %% _route_after_guardrails: SHADOW_MODE -> shadow_log; else -> send_reply
     Guardrails --> ShadowFork{SHADOW_MODE?}
@@ -36,11 +36,11 @@ flowchart TD
     UpdateSession --> UpdateMemory[update_memory]
     UpdateMemory --> EndNormal([END])
 
-    style OpenAIChat fill:#dbeafe
-    style Guardrails fill:#fee2e2
-    style ShadowLog fill:#e0e7ff
-    style RetrieveHybrid fill:#dcfce7
-    style UpdateMemory fill:#fef3c7
+    style OpenAIChat fill:#dbeafe,color:#1e3a5f
+    style Guardrails fill:#fee2e2,color:#991b1b
+    style ShadowLog fill:#e0e7ff,color:#3730a3
+    style RetrieveHybrid fill:#dcfce7,color:#14532d
+    style UpdateMemory fill:#fef3c7,color:#451a03
 ```
 
 Note the auth branch: when `GENERATION_BACKEND == "ollama"` the graph skips `retrieve_hybrid` entirely and routes straight to `load_memory`. The LoRA path does not consume few-shot retrieval (see Two prompt shapes below).

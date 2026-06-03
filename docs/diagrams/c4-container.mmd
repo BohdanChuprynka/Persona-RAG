@@ -1,49 +1,51 @@
-%% C4 Level 2: Container diagram for Persona-RAG
-%% Rendered as a standard Mermaid flowchart (GitHub-compatible).
-flowchart TB
+%% C4 Level 2: Container diagram for Persona-RAG (runtime containers).
+%% Standard Mermaid flowchart (GitHub-compatible). Left-to-right layers.
+%% Every node pins an explicit text color so it stays readable on GitHub's
+%% light AND dark themes. Offline batch pipelines have their own diagrams
+%% (see DATA-PIPELINE.md and INSIGHTS.md).
+flowchart LR
     user([Telegram User])
-    tg[["Telegram Bot API<br/>(external)"]]
-    openai[["OpenAI API<br/>chat + embeddings"]]
-    ollama[["Ollama<br/>local LoRA (bohdan)"]]
+    reviewer([Reviewer])
 
-    subgraph PRAG["Persona-RAG"]
+    subgraph surface["Surface"]
         direction TB
-
-        bot["Bot Service<br/>[aiogram] handlers + DI"]
-        engine["LangGraph Engine<br/>[langgraph] compiled state machine<br/>auth → retrieve → build_prompt → chat → guardrails → send"]
-        demo["Streamlit Demo UI<br/>[streamlit] :8501"]
-
-        qdrant[("Qdrant<br/>[vector DB] :6333<br/>chat turns + insights")]
-        sqlite[("SQLite Store<br/>[sqlmodel] sessions, memory, whitelist")]
-        mlflow["MLflow<br/>[mlflow] :5001 tracking + artifacts"]
-
-        ingest["Ingest Pipeline<br/>scripts/ingest.py"]
-        insights["Insights Pipeline<br/>scripts/distill_insights.py"]
-        evalft["Eval + Fine-tune<br/>scripts/eval_persona.py + Colab LoRA"]
+        tg["Telegram Bot API"]
+        bot["Bot Service<br/>aiogram + DI"]
+        demo["Streamlit UI<br/>:8501"]
     end
 
-    %% Runtime request path
-    user -->|message| tg
-    tg -->|update| bot
-    bot -->|invoke per turn| engine
-    engine -->|hybrid + insight retrieval| qdrant
-    engine -->|sessions / persona memory| sqlite
-    engine -->|generate reply| openai
-    engine -->|generate reply, --local| ollama
-    engine -->|reply text| bot
-    bot -->|sendMessage| tg
-    tg -->|reply| user
+    engine(["LangGraph Engine<br/>compiled state machine<br/>auth · retrieve · prompt<br/>chat · guard · send"])
 
-    %% Demo UI shares the engine
-    demo -->|invoke| engine
+    subgraph data["Data + Models"]
+        direction TB
+        openai["OpenAI<br/>chat + embeddings"]
+        ollama["Ollama<br/>local LoRA"]
+        qdrant[("Qdrant<br/>turns + insights")]
+        sqlite[("SQLite<br/>sessions · memory")]
+        mlflow["MLflow<br/>:5001 tracking"]
+    end
 
-    %% Batch pipelines write the stores
-    ingest -->|embed + upsert turns| qdrant
-    ingest -->|seed metadata| sqlite
-    insights -->|distill + upsert insights| qdrant
-    insights -->|read source turns| sqlite
+    user --> tg
+    tg --> bot
+    reviewer --> demo
+    bot --> engine
+    demo --> engine
+    engine --> openai
+    engine -.-> ollama
+    engine --> qdrant
+    engine --> sqlite
+    engine -.-> mlflow
 
-    %% Observability + offline eval
-    engine -.->|metrics / shadow logs| mlflow
-    evalft -.->|log scores| mlflow
-    evalft -->|score replies| openai
+    classDef client fill:#eef2ff,stroke:#475569,color:#1e293b;
+    classDef surf fill:#dbeafe,stroke:#1e40af,color:#1e3a5f;
+    classDef eng fill:#a7f3d0,stroke:#047857,stroke-width:3px,color:#052e16;
+    classDef store fill:#dbeafe,stroke:#1e40af,color:#1e3a5f;
+    classDef model fill:#fef3c7,stroke:#b45309,color:#451a03;
+    classDef obs fill:#ede9fe,stroke:#6d28d9,color:#4c1d95;
+
+    class user,reviewer client;
+    class tg,bot,demo surf;
+    class engine eng;
+    class qdrant,sqlite store;
+    class openai,ollama model;
+    class mlflow obs;
