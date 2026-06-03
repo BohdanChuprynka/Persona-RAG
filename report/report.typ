@@ -26,11 +26,22 @@
   #block(width: 88%, inset: (x: 6pt))[
     #set par(justify: true)
     #set text(9.5pt)
-    #align(left)[*Abstract.* #emph[Written in the final pass (Task 12), once every number
-    is locked. It states the question (can a fine-tune replicate one person's texting
-    voice, and how do you prove it?), the \~90% eval leak found and fixed, the two-arm
-    controlled/production design with a proven retrieval guard, the verdict (the LoRA
-    ships), and the open Turing frontier.]]
+    #align(left)[*Abstract.* Can a small local fine-tune replicate one person's
+    texting voice — and how would you prove it? We build Persona-RAG, a Telegram bot
+    that answers in its owner's voice, and ask whether a fine-tuned Qwen2.5-3B LoRA
+    texts more like him than the shipped gpt-4o-mini product (a \~1600-token
+    retrieval-augmented prompt with decode levers). Trust comes first: we document a
+    \~90% train/test leak in the original evaluation, found and fixed, then score both
+    backends on a recipient-stratified, model-disjoint hold-out with paired bootstrap
+    intervals under a pre-registered acceptance rule. A controlled arm isolates the
+    weights; a production arm pits the full API stack against the thin fine-tune, with
+    a per-item retrieval guard that removes a measured 28% gold-answer leak. On a level
+    field the fine-tune wins reply length decisively (Cliff's δ = 0.95) and matches the
+    no-"!" register; fully equipped, the production machinery only claws the API back
+    to parity — at \$0.37 per thousand replies and an \~11× token tax against \$0
+    local. A blind human read concurs: the API is trivially discriminable. Three
+    independent methods agree the fine-tune ships; the open frontier is whether the
+    owner can tell it from himself.]
   ]
 ]
 
