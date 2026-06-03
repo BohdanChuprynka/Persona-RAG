@@ -44,6 +44,12 @@ log = get_logger()
 
 VAULT_CATEGORIES = {"bio", "relationship", "value", "opinion"}
 
+# Vault notes are user-authored, so the facts are trusted (like onboarding). We do
+# NOT ask the model to rate confidence — gpt-4o-mini echoed the schema's 0.0
+# placeholder on every fact and sank them all to "pending". Assign a fixed high
+# value so curated facts route to "approved".
+_VAULT_FACT_CONFIDENCE = 0.9
+
 VAULT_EXTRACT_SYSTEM_PROMPT = """\
 You extract DURABLE IDENTITY facts about {persona_name} from their own first-person
 notes. The text is already written by {persona_name} — treat every statement as theirs
@@ -68,8 +74,7 @@ Output ONLY valid JSON:
       "category": "bio|relationship|value|opinion",
       "subject": "short lowercase noun-phrase, e.g. 'school', 'best friend'",
       "text_uk": "<one Ukrainian sentence>",
-      "text_en": "<one English sentence>",
-      "confidence": 0.0
+      "text_en": "<one English sentence>"
     }}
   ]
 }}
@@ -174,7 +179,7 @@ def parse_vault_response(text: str, *, source_file: str) -> list[RawVaultFact]:
                     subject=str(item["subject"]),
                     text_uk=str(item["text_uk"]),
                     text_en=str(item["text_en"]),
-                    confidence=float(item.get("confidence", 0.5)),
+                    confidence=_VAULT_FACT_CONFIDENCE,
                     source_file=source_file,
                 )
             )

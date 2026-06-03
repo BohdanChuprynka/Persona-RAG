@@ -136,6 +136,18 @@ def test_parse_vault_strips_fence():
     assert parse_vault_response('```json\n{"facts": []}\n```', source_file="f") == []
 
 
+def test_parse_vault_assigns_trusted_confidence():
+    """Regression: vault facts are user-authored -> trusted. The parser ignores the
+    model's confidence (gpt-4o-mini echoed the schema's 0.0 and sank every fact to
+    'pending') and assigns a high value so curated facts route to 'approved'."""
+    resp = (
+        '{"facts": [{"category": "bio", "subject": "school",'
+        ' "text_uk": "a", "text_en": "b", "confidence": 0.0}]}'
+    )
+    out = parse_vault_response(resp, source_file="me.md")
+    assert out[0].confidence >= 0.6
+
+
 # --- Task 5: extract (mocked LLM) ---
 
 
