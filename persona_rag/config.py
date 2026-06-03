@@ -177,6 +177,13 @@ class Settings(BaseSettings):
     INSIGHTS_USE_GENERATED_PERSONA_DESCRIPTION: bool = True
     QDRANT_INSIGHTS_COLLECTION: str = "self_insights"
 
+    # --- Vault fact ingestion (spec 2026-06-03) ---
+    VAULT_RAW_DIR: str = "data/raw/vault"
+    VAULT_CONFIDENCE_THRESHOLD: float = 0.6
+    INSIGHTS_FACTS_ROUTER_ENABLED: bool = True
+    INSIGHTS_SELFDESC_ANCHOR_THRESHOLD: float = 0.55
+    INSIGHTS_CORE_MAX_FACTS: int = 4
+
 
 @lru_cache
 def get_settings() -> Settings:

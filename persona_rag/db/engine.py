@@ -35,6 +35,13 @@ def make_engine(path: str | Path | None = None) -> Engine:
             else:
                 conn.exec_driver_sql("DROP TABLE usermemory")
 
+        # Additive migration (spec 2026-06-03): InsightRow.text_en for the
+        # query-language fact card. Idempotent; no-op on fresh DBs (create_all
+        # already added the column from the model).
+        ins_cols = {r[1] for r in conn.exec_driver_sql("PRAGMA table_info(insight_row)").fetchall()}
+        if ins_cols and "text_en" not in ins_cols:
+            conn.exec_driver_sql("ALTER TABLE insight_row ADD COLUMN text_en VARCHAR")
+
     return engine
 
 

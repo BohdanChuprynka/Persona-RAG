@@ -96,6 +96,7 @@ class InsightRow(SQLModel, table=True):
     category: str = Field(index=True)  # bio|opinion|interest|behavior
     subject: str = Field(index=True)
     text: str
+    text_en: str | None = None
     confidence: float
     evidence_count: int = 1
     earliest_date: datetime
