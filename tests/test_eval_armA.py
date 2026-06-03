@@ -10,6 +10,7 @@ from unittest.mock import MagicMock
 from qdrant_client.models import Filter, HasIdCondition
 
 import persona_rag.retrieval as retr
+from persona_rag.eval.compare import LeakError, leak_guard
 from persona_rag.index.qdrant_store import search_dense
 
 
@@ -127,3 +128,53 @@ def test_gen_all_forwards_logit_bias() -> None:
         )
     )
     assert captured.get("logit_bias") == {123: 2}
+
+
+# --- Task 5: two-leg leak_guard ------------------------------------------------
+def _rt(_id: str, reply: str, ctx: list[str], score: float) -> SimpleNamespace:
+    return SimpleNamespace(
+        turn=SimpleNamespace(id=_id, your_reply=reply, incoming_context=ctx),
+        score=score,
+    )
+
+
+def test_leak_guard_id_leg_raises() -> None:
+    retrieved = [_rt("gold", "anything", ["c"], 0.9)]
+    try:
+        leak_guard(gold_turn_id="gold", gold_reply="x", gold_ctx=["c"], retrieved=retrieved)
+        raise AssertionError("expected LeakError")
+    except LeakError:
+        pass
+
+
+def test_leak_guard_exact_text_same_context_raises() -> None:
+    retrieved = [_rt("other", "да", ["ctx line"], 0.8)]
+    try:
+        leak_guard(gold_turn_id="gold", gold_reply="да", gold_ctx=["ctx line"], retrieved=retrieved)
+        raise AssertionError("expected LeakError")
+    except LeakError:
+        pass
+
+
+def test_leak_guard_exact_text_diff_context_counts_not_raises() -> None:
+    retrieved = [_rt("other", "да", ["unrelated"], 0.7)]
+    out = leak_guard(
+        gold_turn_id="gold", gold_reply="да", gold_ctx=["the real ctx"], retrieved=retrieved
+    )
+    assert out["exact_text_dup_diff_context"] == 1
+    assert out["top_sim"] == 0.7
+
+
+def test_leak_guard_clean_returns_top_sim() -> None:
+    retrieved = [_rt("o1", "hello", ["a"], 0.6), _rt("o2", "world", ["b"], 0.3)]
+    out = leak_guard(gold_turn_id="gold", gold_reply="да", gold_ctx=["c"], retrieved=retrieved)
+    assert out["exact_text_dup_diff_context"] == 0
+    assert out["top_sim"] == 0.6
+
+
+def test_leak_guard_non_strict_counts_id_leak() -> None:
+    retrieved = [_rt("gold", "да", ["c"], 0.9)]
+    out = leak_guard(
+        gold_turn_id="gold", gold_reply="да", gold_ctx=["c"], retrieved=retrieved, strict=False
+    )
+    assert out["id_leak"] == 1

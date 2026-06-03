@@ -51,6 +51,56 @@ def _norm(text: str) -> str:
     return _WS.sub(" ", text).strip().lower()
 
 
+class LeakError(RuntimeError):
+    """Retrieval surfaced the gold answer-key for the item being scored (arm A)."""
+
+
+def leak_guard(
+    *,
+    gold_turn_id: str,
+    gold_reply: str,
+    gold_ctx: list[str],
+    retrieved: list[Any],
+    strict: bool = True,
+) -> dict[str, Any]:
+    """Two-leg per-item leak guard for the arm-A API arm (the LoRA path skips
+    retrieval, so it cannot leak).
+
+    ID leg: the gold turn itself is in the retrieved set -> a true answer-key
+    leak. Exact-text leg: the gold reply text appears under a DIFFERENT turn id;
+    a leak ONLY when that turn shares the gold's incoming context (a re-minted
+    duplicate of THIS turn) -- a generic short reply ("ок") elsewhere is a fair
+    neighbour and is merely counted. ``strict=False`` (leak-ON validation) counts
+    every leak instead of raising. Returns per-item telemetry incl. ``top_sim``.
+    """
+    ids = {r.turn.id for r in retrieved}
+    gold_norm = _norm(gold_reply)
+    gold_ctx_norm = _norm("\n".join(c for c in gold_ctx if c and c.strip()))
+    id_leak = 1 if gold_turn_id in ids else 0
+    if id_leak and strict:
+        raise LeakError(f"gold turn_id retrieved: {gold_turn_id}")
+    same_ctx_dup = 0
+    diff_ctx_dup = 0
+    for r in retrieved:
+        if _norm(r.turn.your_reply) != gold_norm:
+            continue
+        r_ctx_norm = _norm("\n".join(c for c in r.turn.incoming_context if c and c.strip()))
+        if r_ctx_norm == gold_ctx_norm:
+            same_ctx_dup += 1
+        else:
+            diff_ctx_dup += 1
+    if same_ctx_dup and strict:
+        raise LeakError(f"exact gold text under re-minted id, same context: {gold_turn_id}")
+    top_sim = max((r.score for r in retrieved), default=float("nan"))
+    return {
+        "top_sim": top_sim,
+        "id_leak": id_leak,
+        "exact_text_dup_same_context": same_ctx_dup,
+        "exact_text_dup_diff_context": diff_ctx_dup,
+        "n_retrieved": len(retrieved),
+    }
+
+
 def _nonempty(texts: list[str]) -> bool:
     return any(t and t.strip() for t in texts)
 
