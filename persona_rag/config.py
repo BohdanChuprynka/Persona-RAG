@@ -183,6 +183,13 @@ class Settings(BaseSettings):
     INSIGHTS_FACTS_ROUTER_ENABLED: bool = True
     INSIGHTS_SELFDESC_ANCHOR_THRESHOLD: float = 0.55
     INSIGHTS_CORE_MAX_FACTS: int = 4
+    # Casual Telegram deployment: a vague "tell me about yourself" is answered by
+    # the trained voice, not a fact sheet, so the curated CORE card is OFF by
+    # default. The self-description lane is still detected (it suppresses spurious
+    # semantic injection on meta-questions); specific questions still retrieve
+    # facts normally. Flip True for a professional/portfolio deployment to restore
+    # the curated card. See spec 2026-06-03 decision (b).
+    INSIGHTS_SELFDESC_CARD_ENABLED: bool = False
 
 
 @lru_cache

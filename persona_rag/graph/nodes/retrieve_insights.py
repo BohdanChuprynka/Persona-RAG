@@ -77,7 +77,15 @@ async def retrieve_insights(state: GraphState) -> GraphState:
                     vec, avs, threshold=s.INSIGHTS_SELFDESC_ANCHOR_THRESHOLD
                 ):
                     lane = "self_desc"
-                    core = load_core_facts(limit=s.INSIGHTS_CORE_MAX_FACTS, query_lang=query_lang)
+                    # Casual default: the trained voice answers a vague self-intro,
+                    # so the CORE card stays empty. Detecting the lane still matters:
+                    # it keeps semantic identity facts from leaking onto a
+                    # meta-question. INSIGHTS_SELFDESC_CARD_ENABLED restores the card
+                    # for a professional/portfolio deployment.
+                    if s.INSIGHTS_SELFDESC_CARD_ENABLED:
+                        core = load_core_facts(
+                            limit=s.INSIGHTS_CORE_MAX_FACTS, query_lang=query_lang
+                        )
                 elif not semantic:
                     lane = "none"
             except Exception as e:

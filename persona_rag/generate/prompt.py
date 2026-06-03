@@ -225,10 +225,12 @@ def build_fact_card(
 ) -> str | None:
     """Lane + language-aware fact card for the thin LoRA path (spec 2026-06-03).
 
-    self_desc -> curated CORE identity facts (by route); specific -> identity-
-    category semantic hits; none -> nothing. Rendered in the query language and
-    capped. The system turn is never in training loss, so a brief in-language
-    addendum is a mild conditioning shift, never the full insights block.
+    self_desc -> curated CORE identity facts (by route) -- but CORE is empty by
+    default in the casual Telegram deployment, so a vague self-intro yields no
+    card and the trained voice answers (see INSIGHTS_SELFDESC_CARD_ENABLED);
+    specific -> identity-category semantic hits; none -> nothing. Rendered in the
+    query language and capped. The system turn is never in training loss, so a
+    brief in-language addendum is a mild conditioning shift, never the full block.
     """
     ins = insights or {}
     lane = ins.get("lane", "specific")
