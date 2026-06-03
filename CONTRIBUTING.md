@@ -30,43 +30,39 @@ Each subsystem is a package under `persona_rag/`.
 %% C4 Level 1: System Context for Persona-RAG
 %% Standard Mermaid flowchart (renders on GitHub; NOT the C4Context dialect).
 flowchart TD
-    subgraph People[People]
-        Owner[Owner / Admin<br/>ADMIN_TELEGRAM_ID<br/>approves or blocks users, runs admin commands]
-        Chatter[Approved Chatter<br/>whitelisted friend<br/>chats with the persona]
-        Unauth[Unauthorized User<br/>not whitelisted<br/>routed to admin approval]
-        Reviewer[Reviewer<br/>via Streamlit demo UI<br/>pastes messages, inspects replies]
+    subgraph People
+        Owner[Owner / Admin<br/>ADMIN_TELEGRAM_ID]
+        Chatter[Approved Chatter<br/>whitelisted friend]
+        Unauth[Unauthorized User<br/>routed to approval]
+        Reviewer[Reviewer<br/>Streamlit demo UI]
     end
 
-    Core(["<b>Persona-RAG</b><br/>aiogram 3 bot + LangGraph state machine<br/>auth, hybrid retrieval, RAG generation,<br/>guard, per-user memory, shadow log"])
+    Core(["Persona-RAG<br/>aiogram 3 + LangGraph<br/>auth · retrieval · generation<br/>guard · memory · shadow log"])
 
-    subgraph External[External Systems]
-        TG[Telegram Bot API<br/>optional / one surface]
-        OpenAI[OpenAI API<br/>required default]
-        Ollama[Ollama<br/>optional local LoRA backend]
-        Colab[Google Colab + Drive<br/>optional LoRA training]
+    subgraph External["External Systems"]
+        TG[Telegram Bot API]
+        OpenAI[OpenAI<br/>gpt-4o-mini · embeddings]
+        Ollama[Ollama<br/>optional local LoRA]
+        Colab[Colab + Drive<br/>optional training]
         LangSmith[LangSmith<br/>optional tracing]
     end
 
-    %% People -> System
-    Owner -->|approve / block via DM,<br/>admin commands| Core
-    Chatter -->|DMs the bot| Core
-    Unauth -->|first DM triggers<br/>approval flow| Core
-    Reviewer -->|paste message,<br/>localhost:8501| Core
+    Owner -->|admin commands| Core
+    Chatter -->|DMs| Core
+    Unauth -->|first DM| Core
+    Reviewer -->|paste msg| Core
 
-    %% System <-> External
-    Core <-->|receive updates,<br/>send replies via TELEGRAM_BOT_TOKEN| TG
-    Core <-->|embeddings text-embedding-3-small,<br/>chat gpt-4o-mini + prompt caching| OpenAI
-    Core <-->|chat completions vs served LoRA<br/>when GENERATION_BACKEND=ollama| Ollama
-    Colab -.->|trains adapter, exports<br/>GGUF/Modelfile for Ollama| Ollama
-    Core -.->|per-node run traces<br/>when LANGCHAIN_TRACING_V2| LangSmith
+    Core <-->|send / receive| TG
+    Core <-->|chat + embeddings| OpenAI
+    Core <-->|served LoRA| Ollama
+    Colab -.->|exports GGUF| Ollama
+    Core -.->|traces| LangSmith
 
     classDef person fill:#dbeafe,stroke:#1e40af,color:#0b1f4d;
-    classDef system fill:#dcfce7,stroke:#15803d,color:#052e16;
     classDef ext fill:#fef3c7,stroke:#b45309,color:#451a03;
-
     class Owner,Chatter,Unauth,Reviewer person;
-    class Core system;
     class TG,OpenAI,Ollama,Colab,LangSmith ext;
+    style Core fill:#a7f3d0,stroke:#047857,stroke-width:3px,color:#052e16
 ```
 
 ### Per-message pipeline
@@ -87,9 +83,9 @@ flowchart TD
     RetrieveHybrid --> LoadMem
     LoadMem --> RetrieveInsights[retrieve_insights]
     RetrieveInsights --> LoadSession[load_session]
-    LoadSession --> BuildPrompt[build_prompt<br/>cacheable prefix]
+    LoadSession --> BuildPrompt[build_prompt<br/>THIN_SYSTEM + few-shot]
     BuildPrompt --> OpenAIChat[openai_chat]
-    OpenAIChat --> Guardrails[guardrails<br/>PII / length / refuse-list]
+    OpenAIChat --> Guardrails[guardrails<br/>PII / length cap / REDACTED gate]
 
     %% _route_after_guardrails: SHADOW_MODE -> shadow_log; else -> send_reply
     Guardrails --> ShadowFork{SHADOW_MODE?}
@@ -101,11 +97,11 @@ flowchart TD
     UpdateSession --> UpdateMemory[update_memory]
     UpdateMemory --> EndNormal([END])
 
-    style OpenAIChat fill:#dbeafe
-    style Guardrails fill:#fee2e2
-    style ShadowLog fill:#e0e7ff
-    style RetrieveHybrid fill:#dcfce7
-    style UpdateMemory fill:#fef3c7
+    style OpenAIChat fill:#dbeafe,color:#1e3a5f
+    style Guardrails fill:#fee2e2,color:#991b1b
+    style ShadowLog fill:#e0e7ff,color:#3730a3
+    style RetrieveHybrid fill:#dcfce7,color:#14532d
+    style UpdateMemory fill:#fef3c7,color:#451a03
 ```
 
 ## 2. Where do I change ONE thing

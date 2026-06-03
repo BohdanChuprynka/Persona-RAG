@@ -158,7 +158,7 @@ Batch, run after ingest. Driven by `scripts/distill_insights.py` over `persona_r
 | 5 | `load_session` | `load_session.py` | Load the current conversation window. |
 | 6 | `build_prompt` | `build_prompt.py` | Assemble the prompt (cacheable prefix on the OpenAI path; thin shape on the LoRA path). |
 | 7 | `openai_chat` | `openai_chat.py` | Generate the reply via the configured backend. |
-| 8 | `guardrails` | `guardrails.py` | PII, length, and refuse-list checks. |
+| 8 | `guardrails` | `guardrails.py` | PII redaction, length cap, and the `<REDACTED>` gate. |
 | 9 | `send_reply` | `send_reply.py` | Send Telegram reply bubbles (skipped in shadow mode). |
 | 10 | `shadow_log` | `shadow_log.py` | Append a JSONL line instead of sending when `SHADOW_MODE`. |
 | 11 | `update_session` | `update_session.py` | Append the turn to the session log. |
