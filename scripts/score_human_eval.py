@@ -1,13 +1,21 @@
-"""Score a completed blind human-eval into a LoRA-vs-API win-rate + Wilson CI.
+"""Score a completed blind human-eval.
 
-Run after rating in ``reports/<name>/human_eval/rater.html`` and downloading
-``choices.json`` into that folder. Joins choices against ``key.json`` (and, when
-present, ``data/eval/compare/<name>/pairs.jsonl`` for a per-language breakdown).
+Two modes:
+  --mode ab      (default) LoRA-vs-API preference -> LoRA win-rate + Wilson CI.
+                 Kit dir: reports/<name>/human_eval/
+  --mode turing  real-vs-LoRA detection ("which is the bot?") -> detection-rate
+                 + Wilson CI + verdict + a voice-vs-knowledge split of the
+                 "tells". Kit dir: reports/<name>/turing/
 
-    uv run python scripts/score_human_eval.py --name main
+Run after rating in the kit's rater.html and downloading choices.json into it.
 
-Verdict: a Wilson 95% CI on the LoRA win-rate that excludes 0.5 = a real
-preference; otherwise a tie (the audit's definition of "better").
+    uv run python scripts/score_human_eval.py --name main                # A/B
+    uv run python scripts/score_human_eval.py --name main --mode turing  # Turing
+
+Verdict (ab): a Wilson 95% CI on the LoRA win-rate that excludes 0.5 = a real
+preference; otherwise a tie. Verdict (turing): a CI on the detection-rate that
+INCLUDES 0.5 = the LoRA is statistically indistinguishable from Bohdan (it
+passes); a CI strictly above 0.5 = a rater can still tell.
 """
 
 from __future__ import annotations
@@ -15,17 +23,111 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+from typing import Any
 
-from persona_rag.eval.compare import score_preferences
+from persona_rag.eval.compare import score_detection, score_preferences
+
+_LANG_BUCKETS = ("latin", "cyrillic", "mixed", "other")
+
+
+def _lang_map(name: str) -> dict[str, str]:
+    """item_id -> language bucket from the run's pairs.jsonl (empty if absent)."""
+    pairs_path = Path("data/eval/compare") / name / "pairs.jsonl"
+    if not pairs_path.exists():
+        return {}
+    return {
+        str(json.loads(line)["item_id"]): json.loads(line)["lang"]
+        for line in pairs_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    }
+
+
+def _fmt(x: object) -> str:
+    return f"{x:.3f}" if isinstance(x, float) else str(x)
+
+
+def _report_ab(name: str, choices: dict[str, Any], key: dict[str, Any], kit: Path) -> None:
+    overall = score_preferences(choices, key)
+    lang = _lang_map(name)
+    by_lang: dict[str, dict[str, object]] = {}
+    for bucket in _LANG_BUCKETS:
+        sub = {i: c for i, c in choices.items() if lang.get(i) == bucket}
+        if sub:
+            by_lang[bucket] = score_preferences(sub, key)
+
+    (kit / "human_scorecard.json").write_text(
+        json.dumps(
+            {"name": name, "overall": overall, "by_language": by_lang},
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    lo, hi = overall["wilson_95ci"]
+    print("=" * 56)
+    print(f"  BLIND A/B PANEL (LoRA vs API) - {name}")
+    print("=" * 56)
+    print(f"  rated {len(choices)}  decisive {overall['decisive']}  ties {overall['ties']}")
+    print(f"  LoRA wins {overall['lora_wins']}  API wins {overall['api_wins']}")
+    print(f"  LoRA win-rate {_fmt(overall['lora_win_rate'])}  Wilson95 [{lo:.3f}, {hi:.3f}]")
+    print(f"  VERDICT: {overall['verdict']}")
+    if by_lang:
+        print("-" * 56)
+        for b, r in by_lang.items():
+            wr = _fmt(r["lora_win_rate"])
+            print(f"  {b:9s} n={r['decisive']:<3} win-rate={wr} -> {r['verdict']}")
+    print("=" * 56)
+
+
+def _report_turing(name: str, choices: dict[str, Any], key: dict[str, Any], kit: Path) -> None:
+    overall = score_detection(choices, key)
+    lang = _lang_map(name)
+    by_lang: dict[str, dict[str, object]] = {}
+    for bucket in _LANG_BUCKETS:
+        sub = {i: c for i, c in choices.items() if lang.get(i) == bucket}
+        if sub:
+            by_lang[bucket] = score_detection(sub, key)
+
+    (kit / "turing_scorecard.json").write_text(
+        json.dumps(
+            {"name": name, "overall": overall, "by_language": by_lang},
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    lo, hi = overall["wilson_95ci"]
+    tells = overall["tells"]
+    print("=" * 56)
+    print(f"  TURING PANEL (real vs LoRA) - {name}")
+    print("=" * 56)
+    print(f"  rated {len(choices)}  decisive {overall['decisive']}  unsure {overall['unsure']}")
+    print(f"  bot caught {overall['machine_caught']}  fooled {overall['human_mistaken']}")
+    print(f"  detection-rate {_fmt(overall['detection_rate'])}  Wilson95 [{lo:.3f}, {hi:.3f}]")
+    print(f"  VERDICT: {overall['verdict']}  (indistinguishable = passes as you)")
+    if tells["n"]:
+        v, kn, o = tells["voice"], tells["knowledge"], tells["other"]
+        print("-" * 56)
+        print(f"  caught by: voice {v} / knowledge {kn} / other {o}")
+        print(f"  tells: {tells['by_tag']}")
+        print("  voice -> decode/training fix; knowledge -> Obsidian fact-card fix")
+    if by_lang:
+        print("-" * 56)
+        for b, r in by_lang.items():
+            dr = _fmt(r["detection_rate"])
+            print(f"  {b:9s} n={r['decisive']:<3} detect={dr} -> {r['verdict']}")
+    print("=" * 56)
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Score a blind human-eval.")
+    ap = argparse.ArgumentParser(description="Score a blind human-eval (A/B or Turing).")
     ap.add_argument("--name", default="main")
+    ap.add_argument("--mode", choices=["ab", "turing"], default="ab")
     ap.add_argument("--choices", default="", help="path to choices.json (default: in the kit dir)")
     a = ap.parse_args()
 
-    kit = Path("reports") / a.name / "human_eval"
+    sub = "turing" if a.mode == "turing" else "human_eval"
+    kit = Path("reports") / a.name / sub
     key = json.loads((kit / "key.json").read_text(encoding="utf-8"))
     choices_path = Path(a.choices) if a.choices else kit / "choices.json"
     if not choices_path.exists():
@@ -33,44 +135,10 @@ def main() -> None:
         return
     choices = json.loads(choices_path.read_text(encoding="utf-8"))
 
-    overall = score_preferences(choices, key)
-
-    # Optional per-language breakdown via the run's pairs.jsonl (item_id -> lang).
-    by_lang: dict[str, dict[str, object]] = {}
-    pairs_path = Path("data/eval/compare") / a.name / "pairs.jsonl"
-    if pairs_path.exists():
-        lang = {
-            str(json.loads(line)["item_id"]): json.loads(line)["lang"]
-            for line in pairs_path.read_text(encoding="utf-8").splitlines()
-            if line.strip()
-        }
-        for bucket in ("latin", "cyrillic", "mixed", "other"):
-            sub = {i: c for i, c in choices.items() if lang.get(i) == bucket}
-            if sub:
-                by_lang[bucket] = score_preferences(sub, key)
-
-    result = {"name": a.name, "overall": overall, "by_language": by_lang}
-    (kit / "human_scorecard.json").write_text(
-        json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
-
-    lo, hi = overall["wilson_95ci"]
-    print("=" * 56)
-    print(f"  BLIND HUMAN PANEL — {a.name}")
-    print("=" * 56)
-    print(f"  rated: {len(choices)}   decisive: {overall['decisive']}   ties: {overall['ties']}")
-    print(f"  LoRA wins: {overall['lora_wins']}   API wins: {overall['api_wins']}")
-    wr = overall["lora_win_rate"]
-    wr_s = f"{wr:.3f}" if isinstance(wr, float) else str(wr)
-    print(f"  LoRA win-rate: {wr_s}   Wilson 95% CI [{lo:.3f}, {hi:.3f}]")
-    print(f"  VERDICT: {overall['verdict']}")
-    if by_lang:
-        print("-" * 56)
-        for b, r in by_lang.items():
-            w = r["lora_win_rate"]
-            w_s = f"{w:.3f}" if isinstance(w, float) else str(w)
-            print(f"  {b:9s} n={r['decisive']:<3} lora_win_rate={w_s} verdict={r['verdict']}")
-    print("=" * 56)
+    if a.mode == "turing":
+        _report_turing(a.name, choices, key, kit)
+    else:
+        _report_ab(a.name, choices, key, kit)
 
 
 if __name__ == "__main__":
