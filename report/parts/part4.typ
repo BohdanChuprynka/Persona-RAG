@@ -92,3 +92,73 @@ context, yet many different replies could be equally "him". A catch may therefor
 reflect a missing private fact rather than a voice defect — which is precisely why
 the verdict is read together with the voice-vs-knowledge split, never from the
 detection rate alone.
+
+== From knowledge tells to a grounding layer <sec-grounding>
+
+The voice/knowledge split is not only a way to read the tells — it is a build order.
+If the catches a reader would make are mostly _knowledge_ tells, then voice is the
+solved problem and the remaining gap is retrieval, not more training. This section
+reports the grounding layer built against that gap, and a probe that measures, on a
+level field, what it actually buys.
+
+The mechanism is deliberately thin, because the fine-tune's whole value is a voice a
+heavy prompt destroys (Part II's dominant finding). Durable identity facts are
+distilled offline from the owner's own notes into a small store. At serving time an
+intent router reads the incoming message: a vague self-intro ("розкажи про себе") is
+left to the trained voice with no facts attached — in a casual register a recited
+fact sheet is the wrong answer, and it is also where fabrication costs least — while a
+_specific_ factual question retrieves the matching identity facts and folds a short,
+in-language card into the system turn. The persona anchor stays byte-identical to
+training; the card is a brief addendum, and because the system turn is masked from the
+training loss it is a conditioning nudge, not the train/serve skew the thin invariant
+(Part I) exists to avoid.
+
+To measure it we run a bare-vs-grounded probe under the identical-prompt discipline of
+Arm B: the same local fine-tune answers 30 identity questions (five decodes each,
+$n = 150$ generations per condition) twice — once on the thin prompt alone (_bare_),
+once with the fact card (_grounded_) — everything else held fixed. Each generation is
+labelled _correct_ / _hallucinated_ / _deflected_ by an LLM judge against the known
+fact. Factual correctness is far more objective than the voice judgment that stalls
+the human panel above — which is why this probe _resolves_ where that one cannot; a
+stratified hand-check agreed with the judge on 11 of 12 sampled labels.
+
+#figure(
+  image("../fig/f12_grounding.png", width: 98%),
+  caption: [Bare vs grounded local fine-tune, $n = 150$ generations per condition.
+  Left: grounding lifts the correct-fact rate from 0.05 to 0.33 (Wilson 95% intervals
+  disjoint) and lowers hallucination from 0.29 to 0.18 (intervals overlap — a
+  directional drop). Right: replies stay short (24 → 38 characters) and the "!" rate
+  stays at 0.00 — the card adds facts without moving the voice.],
+) <fig-grounding>
+
+The result is a clean win on correctness and an honest, partial one on hallucination
+(@fig-grounding). Handed no facts, the bare fine-tune confabulates fluently and in
+register — asked which city he lives in, it answers "London" or "Chicago" with the
+same casual confidence it brings to a real reply — and is correct on just *0.05*
+(95% CI 0.03–0.10) of generations, deflecting two-thirds of the time. The card raises
+the correct-fact rate to *0.33* (0.26–0.41): the intervals are disjoint, a real
+sixfold gain. Hallucination falls from *0.29* (0.22–0.36) to *0.18* (0.13–0.25), but
+here the Wilson intervals _overlap_, so by this report's own disjoint-interval rule
+the drop is directional, not certified. The voice is preserved throughout: the
+exclamation rate stays at 0.00 and mean reply length rises only 24 → 38 characters —
+longer because the reply now carries a fact, still squarely inside the person's short
+register. (The Latin-script rate rises 0.48 → 0.59, but that is content, not drift:
+the surfaced facts carry Latin proper nouns — place and company names — so a grounded
+answer is _expected_ to read more Latin.)
+
+The same numbers size the next step honestly. Even handed the right fact, the
+3-billion-parameter model still _deflects_ on about half of grounded generations
+(0.49) and contradicts it on 0.18; restricting to the 27 probes that actually received
+a card barely moves this (correct 0.36, hallucinated 0.19). The bottleneck is no
+longer retrieval — the router fires and the card carries the fact — but the small
+model's willingness to _use_ a fact it has been given. That points the next investment
+not at more retrieval but at a larger or grounding-tuned local model, and is exactly
+the kind of claim the voice/knowledge split was built to make. Two limits scope it:
+the probe targets facts the vault contains, so it measures retrieval, injection, and
+register-preservation — the live deployment scenario — not generalization to facts the
+vault never held (those still correctly deflect); and the judge, far more reliable on
+fact-matching than on voice, is a spot-checked proxy, not an oracle. Within that
+envelope the reading is clean: grounding makes the local fine-tune measurably _more
+right_ and somewhat _less wrong_ on identity questions without touching the voice —
+turning the voice/knowledge decomposition from an analytic frame into an actionable
+one.

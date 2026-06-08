@@ -58,7 +58,11 @@
     offline capability break toward the local model. On the dimensions we can measure,
     then, the conclusion is clear: the local fine-tune is at least the equal of the
     fully-equipped product and decisively beats the bare model — the better replica of
-    the register, at zero cost. What these surface metrics cannot certify is the
+    the register, at zero cost. A thin, intent-routed grounding layer then addresses the
+    fine-tune's one structural weakness — that it cannot know facts it was never told:
+    distilling identity facts from the owner's own notes lifts its correct-identity-
+    answer rate from 0.05 to 0.33 with the voice intact, making the voice/knowledge
+    split actionable. What these surface metrics cannot certify is the
     subjective "feels like me"; that pre-registered _primary_ check (a blind human
     win-rate) is unresolved here, because the only rater with standing (the author) is
     recall-biased and privacy precludes outside raters — a real limitation, not a gap

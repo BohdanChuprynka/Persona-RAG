@@ -60,3 +60,23 @@ controlled arm (and the API's tic profile under the production stack).
 #figure(image("../fig/shape_dist_armB.png", width: 82%), caption: [Arm B bubble-count distribution per reply.]) <fig-shapedist>
 
 #figure(image("../fig/voice_tics_armA.png", width: 82%), caption: [Arm A tic profile: the production machinery suppresses the API's `!` and tightens its register.]) <fig-tics-a>
+
+== E · Grounding probe
+
+The factual-grounding probe (@sec-grounding) is pre-registered in
+`docs/.../2026-06-08-grounding-probe-design.md` and run by `make compare-vault`.
+Thirty curated identity questions (≈⅔ Ukrainian, ⅓ English), each paired with its
+ground-truth vault fact, are answered by the local fine-tune at five decodes per
+condition (temperature 0.8) — $n = 150$ generations per condition. Both conditions
+share the identical thin prompt; only the fact card differs, built by the live
+`retrieve_insights` → `build_fact_card` path. Each generation is labelled by a
+`gpt-4o-mini` judge under a fixed three-class rubric — _correct_ (asserts the fact),
+_hallucinated_ (asserts a contradicting specific), _deflected_ (commits to no
+checkable fact) — scoring grounding only, never tone or language. Correct and
+hallucinated rates carry Wilson 95% intervals, and a difference is read as real only
+when the intervals are disjoint: correctness clears the bar (0.05 → 0.33), the
+hallucination drop (0.29 → 0.18) does not and is reported as directional. Decodes
+within a probe are correlated, so the per-generation $n$ overstates precision — the
+same single-decode caveat the headline arms carry. The probe set, ground-truth,
+generations, and judged results are personal and stay gitignored under
+`reports/main/grounding/`; only aggregate rates reach this report.

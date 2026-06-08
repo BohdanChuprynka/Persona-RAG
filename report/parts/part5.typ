@@ -86,9 +86,13 @@ machinery serves mainly to recover ground the fine-tune already holds.
 The clearest next steps follow the open threads. Rate the two built panels, turning
 the qualitative human verdict into a win-rate with a Wilson interval and running the
 Turing test against the person's real replies. Add one or two raters for an
-inter-rater agreement check. Use the Turing tell taxonomy — the voice-versus-
-knowledge split — to size a grounding layer: if catches are mostly missing facts,
-the remaining gap is retrieval, not voice. And for a paper-grade leak-free claim,
+inter-rater agreement check. The voice-versus-knowledge split already pointed past
+voice to grounding, and the layer built here (@sec-grounding) acts on it: a thin,
+intent-routed fact card lifts the local model's correct-identity-answer rate from 0.05
+to 0.33 with the voice intact, while only directionally trimming hallucination. The gap
+it exposes is the next target — a 3B model under-uses even a fact it is handed, so the
+remaining identity accuracy lives in a larger or grounding-tuned local model, not in
+more retrieval. And for a paper-grade leak-free claim,
 re-train the fine-tune on a single unified split and add a decode-variance
 robustness pass. The frontier is no longer "fine-tune or API" — that is settled — but
 "fine-tune versus the person".

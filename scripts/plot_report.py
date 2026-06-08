@@ -23,6 +23,7 @@ import matplotlib.pyplot as plt
 
 REAL_C, API_C, LORA_C, MUTE_C = "#64748b", "#2563eb", "#16a34a", "#94a3b8"
 COMPARE = Path("data/eval/compare")
+GROUNDING = Path("reports/main/grounding/results.json")
 FIG = Path("report/fig")
 
 
@@ -268,6 +269,74 @@ def fig_copy_floor() -> None:
     _save(fig, "f9_copy_floor.png")
 
 
+def _ci_err(rate_ci: dict[str, Any]) -> tuple[float, float]:
+    """(lower, upper) error-bar offsets from the point rate, from a RateCI dict."""
+    return rate_ci["rate"] - rate_ci["lo"], rate_ci["hi"] - rate_ci["rate"]
+
+
+def fig_grounding() -> None:
+    """Bare vs grounded local LoRA: factual grounding (left) + register preservation
+    (right). Skipped when the probe has not been run. Aggregates only — no facts."""
+    if not GROUNDING.exists():
+        print("[skip] F12 (grounding probe) — not run (no reports/main/grounding/results.json)")
+        return
+    res = json.loads(GROUNDING.read_text(encoding="utf-8"))
+    bare, ground = res["bare"], res["grounded"]
+    n = bare["labels"]["n"]
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 4.4), gridspec_kw={"width_ratios": [1.8, 1]})
+    w = 0.38
+
+    classes = ["correct", "hallucinated", "deflected"]
+    x = range(len(classes))
+    bvals = [bare["labels"][c]["rate"] for c in classes]
+    gvals = [ground["labels"][c]["rate"] for c in classes]
+    berr = list(zip(*[_ci_err(bare["labels"][c]) for c in classes], strict=True))
+    gerr = list(zip(*[_ci_err(ground["labels"][c]) for c in classes], strict=True))
+    ax1.bar(
+        [i - w / 2 for i in x],
+        bvals,
+        w,
+        color=MUTE_C,
+        label="bare (no facts)",
+        yerr=berr,
+        capsize=4,
+        ecolor="#475569",
+    )
+    ax1.bar(
+        [i + w / 2 for i in x],
+        gvals,
+        w,
+        color=LORA_C,
+        label="grounded (vault facts)",
+        yerr=gerr,
+        capsize=4,
+        ecolor="#475569",
+    )
+    ax1.set_xticks(list(x))
+    ax1.set_xticklabels(classes)
+    ax1.set_ylim(0, 1)
+    ax1.set_ylabel("share of generations")
+    ax1.set_title(f"Factual grounding (n={n}/condition, Wilson 95% CI)")
+    ax1.legend(loc="upper center", fontsize=8)
+    _despine(ax1)
+
+    # Register preservation: reply length is the meaningful signal here (the "!" and
+    # paren tics sit at 0 for both — factual answers don't invoke them). The card
+    # lengthens replies only modestly; they stay within the person's short register.
+    bl, gl = bare["register"]["mean_bubble_len"], ground["register"]["mean_bubble_len"]
+    be, ge = bare["register"]["exclaim_rate"], ground["register"]["exclaim_rate"]
+    bars = ax2.bar(["bare", "grounded"], [bl, gl], width=0.6, color=[MUTE_C, LORA_C])
+    ax2.bar_label(bars, fmt="%.0f", padding=3)
+    ax2.set_ylim(0, max(bl, gl) * 1.35)
+    ax2.set_ylabel("mean reply length (chars)")
+    ax2.set_title("Replies stay short")
+    ax2.set_xlabel(f"exclaim rate {be:.2f} / {ge:.2f} — the voice holds")
+    _despine(ax2)
+
+    fig.suptitle("Grounding the local fine-tune: more correct identity answers, voice intact")
+    _save(fig, "f12_grounding.png")
+
+
 def _winrate_fig(scorecard: dict[str, Any], title: str, rate_key: str, name: str) -> None:
     rate = scorecard.get(rate_key, scorecard.get("rate"))
     ci = scorecard.get("wilson_95ci", scorecard.get("wilson_ci", [None, None]))
@@ -321,6 +390,7 @@ def main() -> None:
         fig_forest,
         fig_operational,
         fig_copy_floor,
+        fig_grounding,
         fig_human,
         fig_turing,
     ):
