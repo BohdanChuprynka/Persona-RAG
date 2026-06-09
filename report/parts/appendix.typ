@@ -63,8 +63,8 @@ controlled arm (and the API's tic profile under the production stack).
 
 == E · Grounding probe
 
-The factual-grounding probe (@sec-grounding) is pre-registered in
-`docs/.../2026-06-08-grounding-probe-design.md` and run by `make compare-vault`.
+The factual-grounding probe (@sec-grounding) is pre-registered — the rubric below was
+fixed before any generation — and run by `make compare-vault`.
 Thirty curated identity questions (≈⅔ Ukrainian, ⅓ English), each paired with its
 ground-truth vault fact, are answered by the local fine-tune at five decodes per
 condition (temperature 0.8) — $n = 150$ generations per condition. Both conditions

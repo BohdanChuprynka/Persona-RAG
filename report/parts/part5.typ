@@ -31,8 +31,8 @@ The result is honest only with its limits stated plainly.
 
 - *Construct validity.* Every automatic metric is a surface proxy; none measures
   "feels like the person" directly. The blind human panel is the only direct
-  measure, and the metric↔human agreement that would validate the proxies is pending
-  the panel's rating.
+  measure, and the metric↔human agreement that would validate the proxies cannot be
+  obtained here — an unbiased panel is precluded by the corpus's privacy.
 - *The human channel is doubly blocked, so the primary verdict is unresolved.* The
   only rater with standing is the owner, and he is _recall-biased_: he recognizes his
   own messages, so his ability to tell model from real conflates memory with voice.

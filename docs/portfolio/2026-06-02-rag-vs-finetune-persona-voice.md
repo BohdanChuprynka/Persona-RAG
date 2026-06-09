@@ -1,6 +1,6 @@
 # Cloning a texting voice: RAG vs fine-tuning, compared fairly
 
-> **DRAFT — for Bohdan to polish/approve before publishing.** Aggregate numbers only; no private chat content. Charts live in `reports/main/` (git-ignored).
+> Aggregate numbers only; no private chat content. The full study — both arms, the grounding layer, and all figures — is in the research report (`report/persona-rag-report.pdf`).
 
 ## The problem
 
@@ -36,7 +36,7 @@ So: a 3B model fine-tuned on a few thousand of my replies reproduces my *registe
 
 ## The honest caveats (what a good comparison admits)
 
-- This is the **controlled** arm — it isolates the weights. It is **not** the shipped product: the deployed API path has retrieval + directives + decode nudges built to fix these exact gaps. "Which product ships better" is a separate, still-to-run comparison.
+- This is the **controlled** arm — it isolates the weights. It is **not** the shipped product: the deployed API path has retrieval + directives + decode nudges built to fix these exact gaps. "Which product ships better" is a separate comparison — run in the report's production arm (Arm A), where the full API stack pulls up to a voice *tie* with the thin fine-tune.
 - The fine-tune near-copies ~7–15% of training replies. For *short* casual texts this is partly unavoidable (everyone reuses `ок`, `та норм`) — but it needs a length-controlled baseline before claiming overfitting.
 - Automatic metrics are surface proxies; the blind human panel is the real test.
 
@@ -46,4 +46,4 @@ So: a 3B model fine-tuned on a few thousand of my replies reproduces my *registe
 2. **Fine-tuning buys register cheaply and locally.** For voice/style (not knowledge), a small local LoRA is a strong, $0-marginal-cost option.
 3. **train == serve.** The fine-tune only wins because it's served under the same thin prompt it trained on.
 
-*Methods, metrics, and the full protocol: `docs/superpowers/2026-06-02-eval-architecture-audit.md` and `docs/superpowers/specs/2026-06-02-api-vs-finetune-comparison-design.md`.*
+*Methods, metrics, and the full protocol are detailed in the research report (`report/persona-rag-report.pdf`).*

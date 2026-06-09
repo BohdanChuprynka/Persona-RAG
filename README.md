@@ -6,16 +6,26 @@
 [![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-Persona-RAG is a LangGraph-orchestrated retrieval-augmented Telegram bot that replies in your voice, grounded in your own exported chat history. You feed it your Telegram and Instagram exports, it indexes them into Qdrant, and approved friends can DM a persona that talks like you. The persona transfer works without fine-tuning: the model sees your real past replies as retrieved few-shot examples. An optional path serves a locally fine-tuned LoRA via Ollama for higher lexical voice fidelity, with the same Telegram pipeline driving either backend.
+Persona-RAG is a LangGraph-orchestrated retrieval-augmented Telegram bot that replies in your voice, grounded in your own exported chat history. You feed it your Telegram and Instagram exports, it indexes them into Qdrant, and approved friends can DM a persona that talks like you. One Telegram pipeline drives two interchangeable backends: a retrieval-augmented `gpt-4o-mini` (your real past replies as few-shot examples) and a locally fine-tuned Qwen2.5-3B LoRA served on a thin, train-equals-serve prompt. A rigorous evaluation (see [Research](#research)) finds the local fine-tune at least matches the fully-equipped API product on the measurable voice register — at \$0 marginal cost.
+
+## Research
+
+This project includes a full, leak-audited evaluation, written up as a research report:
+
+**📄 [Replicating a Texting Voice](report/persona-rag-report.pdf)** — building and honestly evaluating a fine-tuned persona model of one person against a production RAG + GPT-4o-mini baseline (18 pp; Typst sources in [`report/`](report/), rebuild with `bash report/build.sh`).
+
+- **Trust first.** A \~90% train/test leak in the original evaluation, found and fixed; both backends are then scored on a recipient-stratified, model-disjoint hold-out with paired bootstrap 95% CIs under a pre-registered acceptance rule.
+- **Voice.** On a level field the local fine-tune is decisively closer on reply length (Cliff's δ = 0.95) and matches the no-`!` register; fully equipped, the production API stack only pulls up to a *voice tie* — at \$0.37 per 1k replies versus **\$0** local.
+- **Grounding.** A thin, intent-routed grounding layer (identity facts distilled from your own notes) lifts the local model's correct-identity-answer rate **0.05 → 0.33** (Wilson 95% CIs disjoint) without disturbing the voice — making the voice/knowledge split actionable.
 
 ## Highlights
 
 - **Persona transfer without fine-tuning.** Retrieved past replies act as few-shot examples, so a base model (`gpt-4o-mini` by default) speaks in your register without an SFT run.
-- **Runtime backend swap.** The `--local` flag points the generate node at a locally-served fine-tuned LoRA through Ollama's OpenAI-compatible API instead of OpenAI. The adapter trains on a thin prompt shape and serves under that exact shape, so train equals serve byte-for-byte (`THIN_SYSTEM` in `persona_rag/generate/persona.py` is imported by both the export and the serving path).
-- **Distributional voice evaluation.** `scripts/eval_persona.py` scores the distance between your real replies and the bot's across stylometric distributions: message shape, per-bubble length, opener variety, script mix, and paren-smiley rate.
+- **Runtime backend swap.** The `--local` flag points the generate node at a locally-served fine-tuned LoRA through an Ollama-compatible OpenAI API (llama.cpp's `llama-server`) instead of OpenAI. The adapter trains on a thin prompt shape and serves under that exact shape, so train equals serve byte-for-byte (`THIN_SYSTEM` in `persona_rag/generate/persona.py` is imported by both the export and the serving path).
+- **Honest, leak-audited evaluation.** A two-arm study (controlled weights-only vs. the full production stack) scores both backends on a model-disjoint hold-out with paired bootstrap CIs, per-item effect sizes, a retrieval leak guard, and a factual-grounding probe — written up in the [research report](report/persona-rag-report.pdf).
 - **Hybrid retrieval.** Dense vectors plus BM25, fused and then reranked with Maximal Marginal Relevance (MMR) and recency decay. Config keys: `HYBRID_DENSE_ALPHA`, `MMR_ENABLED`, `MMR_LAMBDA`, `RECENCY_HALF_LIFE_DAYS`, `HYBRID_SCORE_FLOOR`.
-- **Cost-bounded self-insights pipeline.** A multi-stage extract-verify-consolidate pass distills durable facts about you from your history, gated by an evidence threshold, a distinct-partner check, and a hard USD budget cap (`INSIGHTS_BUDGET_HARD_CAP_USD`).
-- **Engineering hygiene.** 72 Python test files, `ruff` lint and format, `mypy --strict`, pre-commit hooks, and a docker-compose stack for Qdrant and MLflow.
+- **Cost-bounded self-insights + grounding.** A multi-stage extract-verify-consolidate pass distills durable facts about you from your history (gated by an evidence threshold, a distinct-partner check, and a hard USD budget cap), plus an optional Obsidian-vault grounding layer that folds identity facts into the thin prompt for factual questions only — so the local model answers *"where do you study?"* from your notes instead of fabricating.
+- **Engineering hygiene.** 76 Python test files, `ruff` lint and format, `mypy --strict`, pre-commit hooks, and a docker-compose stack for Qdrant and MLflow.
 
 ## How it works
 
@@ -127,7 +137,7 @@ make run-local                                       # serve a local LoRA via Ol
 
 ## Stack
 
-Python 3.12, `uv`, aiogram 3 (bot), LangGraph (orchestration), LangSmith (tracing), OpenAI (LLM and embeddings), Ollama (optional local LoRA backend), Qdrant (vector DB, hybrid retrieval), MLflow (eval tracking), Streamlit (demo UI), SQLModel over SQLite (user state), pydantic-settings, structlog, tenacity, pytest with pytest-asyncio, ruff, mypy strict, pre-commit.
+Python 3.12, `uv`, aiogram 3 (bot), LangGraph (orchestration), LangSmith (tracing), OpenAI (LLM and embeddings), llama.cpp `llama-server` (Ollama-compatible local LoRA backend), Qdrant (vector DB, hybrid retrieval), MLflow (eval tracking), Streamlit (demo UI), SQLModel over SQLite (user state), pydantic-settings, structlog, tenacity, pytest with pytest-asyncio, ruff, mypy strict, pre-commit.
 
 ## Privacy
 

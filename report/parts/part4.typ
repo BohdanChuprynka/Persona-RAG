@@ -7,14 +7,6 @@ can answer it — and where the strongest possible judge exists _in principle_: 
 person whose voice is being cloned, though, as below, that judge turns out to be
 confounded in practice.
 
-#let pending(body) = rect(
-  width: 78%,
-  inset: 12pt,
-  radius: 3pt,
-  fill: rgb("#f8fafc"),
-  stroke: (paint: rgb("#94a3b8"), dash: "dashed"),
-)[#align(center)[#text(9pt, style: "italic", fill: rgb("#475569"))[#body]]]
-
 == The human verdict, and why it can't be resolved here
 
 The pre-registered design names a blind human win-rate as the _primary_ verdict — a
@@ -30,21 +22,12 @@ corpus is dense with private personal content, so recruiting outside raters is
 precluded. An informal self-read did find the bare-model API replies obviously
 off-voice, which is suggestive — but it is a single, recall-biased rater looking at the
 _Arm B_ (thin-prompt) outputs, not a scored, unbiased panel, and the pre-registered
-rule returns a _tie_ on the primary channel until an unbiased win-rate exists
-(@fig-human). The verdict in this report therefore rests on the automatic arms; the
+rule returns a _tie_ on the primary channel until an unbiased win-rate exists. The
+verdict in this report therefore rests on the automatic arms; the
 human read is a weak, confounded corroborator, not a third independent method. The
 kit and scorer exist (the win-rate would resolve a clear \~60/40 preference at
 \~100 items, a 55/45 at \~400), but a clean reading needs raters the privacy
 constraint rules out.
-
-#figure(
-  pending[Figure pending: the blind-panel LoRA win-rate with its Wilson 95% CI would
-  render here once the rater kit (`reports/main/human_eval/rater.html`) is scored to
-  `choices.json`. No unbiased win-rate exists today — the lone available rater is
-  recall-biased and privacy precludes others; the informal self-read is suggestive
-  only.],
-  caption: [Blind human preference panel: LoRA win-rate vs. chance (awaiting ratings).],
-) <fig-human>
 
 == The Turing test
 
@@ -59,20 +42,13 @@ goal; here, success is _failure to discriminate_: a detection rate whose Wilson
 interval _includes_ 0.5 means the judge cannot beat chance, i.e. the fine-tune is
 statistically indistinguishable from the person. It is the harshest test in the
 report — the persona-target is the strongest conceivable discriminator of their own
-voice (@fig-turing). That strength is also the catch: because the author recognizes
+voice. That strength is also the catch: because the author recognizes
 his _own_ real replies, a raw detection rate measures recall as much as voice and
 would _overstate_ discriminability. A meaningful run has to control for memory —
 re-rating after a long delay, or restricting to contexts whose replies he does not
 recall — or it cannot separate "I remember sending this" from "this sounds like me."
 With outside raters barred on privacy grounds, that is why the Turing result is
 reported here as genuinely prospective, not as a number this study can yet defend.
-
-#figure(
-  pending[Figure pending: the Turing detection rate with its Wilson 95% CI renders
-  here once the LoRA-vs-real kit (`reports/main/turing/rater.html`) is rated. An
-  interval spanning 0.5 means indistinguishable from the real person.],
-  caption: [Turing slice: human detection rate vs. chance (awaiting ratings).],
-) <fig-turing>
 
 == What the tells will tell us
 

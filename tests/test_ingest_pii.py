@@ -12,9 +12,9 @@ def test_redact_email():
 
 
 def test_redact_custom_names():
-    out = redact("hey Oksana how are you", names=["oksana"])
-    assert "Oksana" not in out
-    assert "oksana" not in out.lower().replace("<redacted>", "")
+    out = redact("hey Alice how are you", names=["alice"])
+    assert "Alice" not in out
+    assert "alice" not in out.lower().replace("<redacted>", "")
 
 
 def test_preserves_emojis_and_case():

@@ -6,7 +6,7 @@ the recipient-stratified ``eval_split_for`` split the LoRA trained disjoint from
 under the IDENTICAL thin prompt — no retrieval, no directives, no logit-bias,
 matched temperature / max_tokens / n=1. This isolates *weights* (gpt-4o-mini vs
 the fine-tuned Qwen2.5-3B), the only attributable + leak-free comparison today
-(see docs/superpowers/2026-06-02-eval-architecture-audit.md, R1/R2/R3).
+(this fixes the ~90% split-mismatch leak in the legacy runner).
 
 Outputs under ``data/eval/compare/<ts>/``:
   - results.json   scorecard (with bootstrap CIs + guards) + params + latency/cost

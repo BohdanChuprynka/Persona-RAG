@@ -42,7 +42,7 @@ streamlit:
 eval:
 	uv run python scripts/eval_persona.py
 
-# Fair API-vs-LoRA comparison (start llama-server first; see docs/superpowers/specs).
+# Fair API-vs-LoRA comparison (start llama-server first; see the research report).
 compare:
 	uv run python scripts/compare_persona.py --n 300 --seed 0 --name main
 
@@ -63,7 +63,7 @@ compare-turing-score:
 	uv run python scripts/score_human_eval.py --name main --mode turing
 
 # Arm A: production-realism (shipped API rich+retrieval+levers vs LoRA thin). Needs
-# Qdrant up + index built + llama-server. See docs/superpowers/specs/2026-06-02-arm-a-*.
+# Qdrant up + index built + llama-server.
 compare-arma:
 	uv run python scripts/compare_persona_armA.py --n 300 --seed 0 --name armA
 

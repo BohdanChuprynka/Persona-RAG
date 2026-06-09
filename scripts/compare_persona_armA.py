@@ -8,7 +8,7 @@ retrieve_insights) + arm B's scorer/scaffold. The ONLY new risk is the per-item
 exclude_ids filter + the fail-the-run leak guard.
 
 Prereqs: Qdrant up (make up) + index built (make ingest) + llama-server serving
-the LoRA on OLLAMA_BASE_URL. See docs/superpowers/specs/2026-06-02-arm-a-*.
+the LoRA on OLLAMA_BASE_URL.
 
     uv run python scripts/compare_persona_armA.py --n 300 --seed 0 --name armA
     uv run python scripts/compare_persona_armA.py --n 60 --leak-on --name armA_leakon
