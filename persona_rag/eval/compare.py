@@ -418,6 +418,82 @@ def score_preferences(choices: dict[str, str], key: dict[str, dict[str, str]]) -
 
 
 # --------------------------------------------------------------------------- #
+# question-clustered bootstrap (grounding probe) — review fix #7
+# --------------------------------------------------------------------------- #
+def cluster_bootstrap_rate_ci(
+    probe_labels_a: list[list[str]],
+    probe_labels_b: list[list[str]],
+    target: str,
+    *,
+    n_boot: int = 10000,
+    seed: int = 0,
+    ci: float = 0.95,
+) -> dict[str, Any]:
+    """Question-clustered CI for the rate of ``target`` under two conditions
+    whose generations are grouped by probe (question).
+
+    Each condition is ``[[label, ...], ...]`` — one inner list of per-decode
+    labels per probe, aligned probe-for-probe. A plain Wilson interval on the
+    *pooled* generations understates uncertainty, because the K decodes within a
+    probe are correlated (same question, same fact): the independent unit is the
+    probe, not the generation. This resamples probes (with replacement) and then
+    decodes within each resampled probe (two-stage), so a probe's correlated
+    decodes move together. Returns each condition's pooled rate + clustered CI
+    and the paired delta (b - a) CI; ``delta_excludes_zero`` /
+    ``intervals_disjoint`` are the honest significance flags (replacing a
+    disjoint-Wilson-on-n-generations claim).
+    """
+    if len(probe_labels_a) != len(probe_labels_b):
+        raise ValueError("conditions must be aligned probe-for-probe")
+    n = len(probe_labels_a)
+
+    def pooled(groups: list[list[str]]) -> float:
+        flat = [x for g in groups for x in g]
+        return sum(1 for x in flat if x == target) / len(flat) if flat else math.nan
+
+    pa, pb = pooled(probe_labels_a), pooled(probe_labels_b)
+    rng = random.Random(seed)
+    boot_a: list[float] = []
+    boot_b: list[float] = []
+    boot_d: list[float] = []
+    for _ in range(n_boot):
+        idx = [rng.randrange(n) for _ in range(n)]
+        ca = cb = ta = tb = 0
+        for i in idx:
+            ga, gb = probe_labels_a[i], probe_labels_b[i]
+            for _ in range(len(ga)):
+                ca += int(ga[rng.randrange(len(ga))] == target)
+            ta += len(ga)
+            for _ in range(len(gb)):
+                cb += int(gb[rng.randrange(len(gb))] == target)
+            tb += len(gb)
+        if ta and tb:
+            boot_a.append(ca / ta)
+            boot_b.append(cb / tb)
+            boot_d.append(cb / tb - ca / ta)
+
+    def quant(arr: list[float]) -> list[float]:
+        if not arr:
+            return [math.nan, math.nan]
+        arr = sorted(arr)
+        lo_q = (1.0 - ci) / 2.0
+        return [arr[int(lo_q * len(arr))], arr[min(len(arr) - 1, int((1.0 - lo_q) * len(arr)))]]
+
+    a_ci, b_ci, d_ci = quant(boot_a), quant(boot_b), quant(boot_d)
+    return {
+        "target": target,
+        "n_probes": n,
+        "n_boot": n_boot,
+        "a": {"rate": pa, "ci": a_ci},
+        "b": {"rate": pb, "ci": b_ci},
+        "delta_b_minus_a": pb - pa,
+        "delta_ci": d_ci,
+        "delta_excludes_zero": bool(d_ci[0] > 0 or d_ci[1] < 0),
+        "intervals_disjoint": bool(a_ci[1] < b_ci[0] or b_ci[1] < a_ci[0]),
+    }
+
+
+# --------------------------------------------------------------------------- #
 # LoRA-vs-real (Turing) panel — the ABSOLUTE-quality test: does it pass as Bohdan?
 # --------------------------------------------------------------------------- #
 # The API-vs-LoRA panel asks "which is more Bohdan"; this one pairs the LoRA reply

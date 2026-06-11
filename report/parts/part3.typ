@@ -1,4 +1,4 @@
-= Relative fidelity
+= Relative fidelity <sec-relative>
 
 The first fidelity question is relative: does the fine-tune beat the _strong_
 baseline — the full gpt-4o-mini product — at sounding like the person? This part
@@ -13,24 +13,30 @@ result replicates across two seeds (@tab-armB, @fig-armB).
 
 #figure(
   table(
-    columns: 5,
+    columns: 6,
     stroke: none,
-    inset: (x: 7pt, y: 5pt),
-    align: (left, right, right, left, center),
+    inset: (x: 5pt, y: 5pt),
+    align: (left, right, right, right, left, center),
     table.hline(),
-    table.header([Metric], [API], [LoRA], [Δ (95% CI)], [verdict]),
+    table.header([Metric], [API], [LoRA], [Real], [Δ API−LoRA (95% CI)], [verdict]),
     table.hline(stroke: 0.4pt),
-    [Message shape (JS, ↓)], [0.052], [0.024], [+0.028 (-0.014, 0.073)], [tie],
-    [Reply length ($W_1$, ↓)], [128.8], [*2.9*], [+125.9 (107.6, 142.4)], [*LoRA*],
-    [Exclamation rate (↓)], [0.651], [0.000], [—], [descr.],
-    [Opener entropy (↑)], [5.02], [5.77], [—], [descr.],
-    [Cost / 1k replies], [\$0.082], [*\$0*], [—], [LoRA],
+    [Message shape (JS, ↓0)], [0.052], [0.024], [0], [+0.028 (-0.014, 0.073)], [tie],
+    [Reply length ($W_1$, ↓0)], [128.8], [*2.9*], [0], [+125.9 (107.6, 142.4)], [*LoRA*],
+    [Exclamation rate (→)], [0.651], [*0.000*], [0.00], [—], [LoRA],
+    [Code-switch (Latin, →)], [0.023], [*0.260*], [0.235], [—], [LoRA],
+    [Opener entropy (→)], [5.02], [*5.77*], [6.96], [—], [LoRA],
+    [Cost / 1k replies], [\$0.082], [*\$0*], [—], [—], [LoRA],
     table.hline(),
   ),
   caption: [Arm B (controlled), $n = 300$, replicated at $n = 150$ seed 1. Identical
-  thin prompt to both backends. Arrows mark the better direction (↓ closer to the
-  person, ↑ more varied). The length win is large and its CI excludes zero in both
-  seeds.],
+  thin prompt to both backends. *Real* is the person's own held-out value — the
+  target: distance metrics (↓0) aim at zero, rate metrics (→) aim at the Real value.
+  The length win is large and its CI excludes zero in both seeds; on the rate rows the
+  LoRA is closer to the person on every count — notably the code-switch register, which
+  the API essentially drops (0.02 vs the person's 0.24). Two honest notes: both
+  backends still undershoot the person's opener variety (6.96), and both barely produce
+  the `)` smiley (real rate 0.051, API 0.004, LoRA 0.008 — a tic the bare LoRA does
+  _not_ reproduce). Rate rows are descriptive (no CI / multiple-comparison correction).],
 ) <tab-armB>
 
 #figure(
@@ -48,33 +54,38 @@ variety, at zero cost.
 
 #figure(
   table(
-    columns: 5,
+    columns: 6,
     stroke: none,
-    inset: (x: 7pt, y: 5pt),
-    align: (left, right, right, left, center),
+    inset: (x: 5pt, y: 5pt),
+    align: (left, right, right, right, left, center),
     table.hline(),
-    table.header([Metric], [API], [LoRA], [Δ (95% CI)], [verdict]),
+    table.header([Metric], [API], [LoRA], [Real], [Δ API−LoRA (95% CI)], [verdict]),
     table.hline(stroke: 0.4pt),
-    [Message shape (JS, ↓)], [0.0353], [0.0339], [+0.001 (-0.040, 0.040)], [tie],
-    [Reply length ($W_1$, ↓)], [6.97], [3.41], [+3.57 (1.53, 4.66)], [distrib.#super[†]],
-    [Exclamation rate (↓)], [0.000], [0.000], [—], [tie],
-    [Opener entropy (↑)], [3.70], [5.76], [—], [descr.],
-    [Cost / 1k replies], [\$0.37], [*\$0*], [—], [LoRA],
-    [Latency (p50)], [0.96s], [1.01s], [—], [\~tie],
+    [Message shape (JS, ↓0)], [0.0353], [0.0339], [0], [+0.001 (-0.040, 0.040)], [tie],
+    [Reply length ($W_1$, ↓0)], [6.97], [3.41], [0], [+3.57 (1.53, 4.66)], [distrib.#super[†]],
+    [Exclamation rate (→)], [0.000], [0.000], [0.00], [—], [tie],
+    [Code-switch (Latin, →)], [0.003], [*0.118*], [0.224], [—], [LoRA],
+    [Opener entropy (→)], [3.70], [*5.76*], [6.86], [—], [LoRA],
+    [Cost / 1k replies], [\$0.37], [*\$0*], [—], [—], [LoRA],
+    [Latency (p50)], [0.96s], [1.01s], [—], [—], [\~tie],
     table.hline(),
   ),
-  caption: [Arm A (production), $n = 300$, leak guard active (`id_leaks` = 0). The
-  shipped machinery ties the LoRA on shape and `!`. #super[†]On reply length the LoRA
-  leads in _distribution_ (the corpus Wasserstein CI excludes zero), but _per
-  individual message_ the effect is negligible (Cliff's δ = 0.04 — a tie; §3.6).
-  Tic rows are descriptive (no CI / multiple-comparison correction).],
+  caption: [Arm A (production), $n = 300$, leak guard active (`id_leaks` = 0). *Real* is
+  the person's own held-out value (the target). The shipped machinery ties the LoRA on
+  shape and `!`. #super[†]On reply length the LoRA leads in _distribution_ (the corpus
+  Wasserstein CI excludes zero) — an edge that holds across three independent re-decodes
+  (Δ = 3.57, 4.05, 4.42; every CI excludes zero, App. A) — but _per individual message_
+  the effect is negligible (Cliff's δ = 0.04 — a tie; @sec-effect). The LoRA keeps the
+  code-switch and opener edges, though here even the API's rich prompt barely
+  code-switches (0.003 vs the person's 0.224). Rate rows are descriptive (no CI /
+  multiple-comparison correction).],
 ) <tab-armA>
 
 #figure(
   image("../fig/f3_armA_headline.png", width: 88%),
   caption: [Arm A headline distances. Even fully equipped, the API only reaches a
   tie on shape and trails on the length _distribution_ (per-message, length is a tie
-  too; §3.6).],
+  too; @sec-effect).],
 ) <fig-armA-h>
 
 == What the machinery buys
@@ -124,7 +135,7 @@ differentiator, and is reported as low-confidence given the sample.
   \~12 mixed-script items fall below the per-language reporting threshold.],
 ) <fig-lang>
 
-== Effect size: how big, and how consistent
+== Effect size: how big, and how consistent <sec-effect>
 
 A corpus-level distance with a CI does not say how _consistent_ an advantage is
 across individual messages. A per-item effect size does (Cliff's δ @cliff1993), and it
@@ -142,7 +153,10 @@ length fix is so complete that the per-message edge the bare LoRA held in Arm B 
 but disappears under the product — a sharper reading than "the LoRA wins length",
 and a more honest one. The forest plot (@fig-forest) shows every run at once: length
 excludes zero in both Arm B seeds and both Arm A passes; shape is a tie everywhere;
-the underpowered $n = 60$ leak-ablation arms straddle zero, as expected.
+the underpowered $n = 60$ leak-ablation arms straddle zero, as expected. And the lone
+surviving Arm-A edge is not single-decode luck: re-decoding the LoRA arm twice more
+(App. A) leaves the length delta excluding zero every time (Δ = 3.57, 4.05, 4.42),
+even as the per-message effect stays a wash.
 
 #figure(
   image("../fig/f7_forest.png", width: 98%),

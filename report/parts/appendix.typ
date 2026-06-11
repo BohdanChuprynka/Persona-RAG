@@ -7,11 +7,22 @@ All runs are deterministic given the seed; the exact command sequence lives in t
 repository README, so it is not repeated here. The parameters that fix the
 experiment: temperature 0.8, `max_tokens` 200, and 2000 bootstrap resamples; the API
 backend is `gpt-4o-mini` and the local backend is Qwen2.5-3B served as a GGUF
-`Q5_K_M` adapter through `llama.cpp`. Both backends score the recipient-stratified,
-model-disjoint `eval_split_for` hold-out — $n = 300$ for the headline arms, $n = 150$
-for the seed-1 replication, and $n = 60$ for the leak ablations. Known provenance
-gap: the adapter, quantization, and `llama.cpp` build hash are not stamped in the run
-record — a reproducibility limitation on the local-model numbers.
+`Q5_K_M` adapter through `llama.cpp`. The served adapter is pinned by content hash —
+SHA-256 `412350a5964a10c74d97244a4930eb2a6da8422ed80454da2137e5fe2b54b55c`
+(`models/bohdan-q5_k_m.gguf`) — and the comparison harness logs each run's parameters
+and metrics to MLflow. Both backends score the recipient-stratified, model-disjoint
+`eval_split_for` hold-out — $n = 300$ for the headline arms, $n = 150$ for the seed-1
+replication, and $n = 60$ for the leak ablations. The one residual provenance gap is
+the `llama.cpp` build behind the originally-reported decodes, which is not separately
+stamped.
+
+*Decode-variance robustness (review pass).* Because each item is decoded once at
+temperature 0.8, the only non-tie Arm-A result — the distributional reply-length edge —
+was re-decoded twice more on the LoRA arm with the API generations held fixed
+(`scripts/redecode_robustness.py`). The API−LoRA length-Wasserstein delta excludes zero
+in all three decodes (Δ = 3.57, 4.05, 4.42; LoRA $W_1$ = 3.41, 2.93, 2.56), so the edge
+is not single-decode noise; the per-message effect (Cliff's δ = 0.04) stays a tie
+throughout.
 
 == B · Metric formulas
 

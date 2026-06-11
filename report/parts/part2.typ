@@ -1,4 +1,4 @@
-= Can we trust the measurement?
+= Can we trust the measurement? <sec-trust>
 
 Before any comparison can mean anything, the evaluation itself has to be trustworthy.
 This part is the part most write-ups skip: the metrics, the leak that was found and
@@ -7,7 +7,7 @@ fixed, the harness, and the acceptance rule fixed _before_ the results.
 == Measuring a voice
 
 No single number captures "sounds like the person", so the evaluation uses a small
-vector of surface metrics, each targeting one of the voice fingerprints from Part I.
+vector of surface metrics, each targeting one of the voice fingerprints from @sec-build.
 The two headline distances compare _distributions_ against the real held-out replies:
 
 - *Message shape* ($"shape"_"JS"$): the Jensen-Shannon divergence between the

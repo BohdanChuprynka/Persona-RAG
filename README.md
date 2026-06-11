@@ -16,7 +16,7 @@ This project includes a full, leak-audited evaluation, written up as a research 
 
 - **Trust first.** A \~90% train/test leak in the original evaluation, found and fixed; both backends are then scored on a recipient-stratified, model-disjoint hold-out with paired bootstrap 95% CIs under a pre-registered acceptance rule.
 - **Voice.** On a level field the local fine-tune is decisively closer on reply length (Cliff's δ = 0.95) and matches the no-`!` register; fully equipped, the production API stack only pulls up to a *voice tie* — at \$0.37 per 1k replies versus **\$0** local.
-- **Grounding.** A thin, intent-routed grounding layer (identity facts distilled from your own notes) lifts the local model's correct-identity-answer rate **0.05 → 0.33** (Wilson 95% CIs disjoint) without disturbing the voice — making the voice/knowledge split actionable.
+- **Grounding.** A thin, intent-routed grounding layer (identity facts distilled from your own notes) lifts the local model's correct-identity-answer rate **0.05 → 0.33** (question-clustered 95% CIs disjoint) without disturbing the voice — making the voice/knowledge split actionable.
 
 ## Highlights
 

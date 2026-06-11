@@ -51,8 +51,10 @@ sys.path.insert(0, str(Path(__file__).parent.resolve()))
 from compare_persona import (
     TRAIN_PATH,
     _gen_all,
+    _gguf_sha256,
     _latency_cost,
     _load_sharegpt,
+    _log_mlflow,
     _print_summary,
 )
 
@@ -241,6 +243,7 @@ async def run(
             "n_boot": n_boot,
             "api_model": s.OPENAI_CHAT_MODEL,
             "lora_model": s.OLLAMA_MODEL,
+            "lora_model_sha256": _gguf_sha256(s.OLLAMA_MODEL),
             "retrieval_query": "ctx[-1] (runtime-faithful)",
             "levers": {
                 "paren_logit_bias": s.PAREN_LOGIT_BIAS,
@@ -269,6 +272,7 @@ async def run(
         json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8"
     )
     _print_summary(results)
+    _log_mlflow(results, [out_dir / "results.json"])
     log.info("wrote", dir=str(out_dir), leak_guard=results["retrieval_leak_guard"])
 
 

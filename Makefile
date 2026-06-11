@@ -39,7 +39,14 @@ run-local:
 streamlit:
 	uv run streamlit run streamlit_app/main.py
 
+# LEGACY single-arm scorecard (one backend vs real) on the TEMPORAL eval_split.
+# WARNING: scoring the LoRA this way reproduces the ~90% split-mismatch leak the report
+# documents — the LoRA held out the recipient-stratified eval_split_for, which is ~90%
+# disjoint from this temporal split. For any fair API-vs-LoRA claim use `make compare`
+# (controlled arm) or `make compare-arma` (production arm). Kept for the leak demo only.
 eval:
+	@echo "WARNING: legacy single-arm runner on the TEMPORAL split — leaky for the LoRA."
+	@echo "         For a fair comparison use 'make compare' / 'make compare-arma'."
 	uv run python scripts/eval_persona.py
 
 # Fair API-vs-LoRA comparison (start llama-server first; see the research report).

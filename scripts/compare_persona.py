@@ -165,6 +165,55 @@ def _latency_cost(results: list[dict[str, Any]], *, priced: bool) -> dict[str, A
     return block
 
 
+def _gguf_sha256(model_name: str) -> str | None:
+    """Best-effort content hash of the served GGUF, for run provenance. Looks in
+    ``models/`` for a file matching the served model name; returns ``name:hexdigest``
+    or ``None`` if no local GGUF is found (e.g. served from elsewhere)."""
+    import hashlib
+
+    models = Path("models")
+    cands = sorted(models.glob("*.gguf")) if models.exists() else []
+    stem = model_name.split(":")[0]
+    pick = next((p for p in cands if stem and stem in p.stem), None)
+    pick = pick or (cands[0] if len(cands) == 1 else None)
+    if pick is None:
+        return None
+    h = hashlib.sha256()
+    with pick.open("rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return f"{pick.name}:{h.hexdigest()}"
+
+
+def _log_mlflow(results: dict[str, Any], artifacts: list[Path]) -> None:
+    """Best-effort MLflow logging of a comparison run (params + headline metrics).
+    Telemetry must never break an experiment, so every failure (no server, missing
+    dep) is swallowed. Only aggregate ``results.json`` should be passed as an artifact
+    — never ``pairs.jsonl``, which holds raw private messages."""
+    try:
+        from persona_rag.eval.mlflow_wrap import log_eval_run
+
+        card = results.get("scorecard", {})
+        metrics: dict[str, float] = {}
+        for arm in ("api", "lora"):
+            for k, v in card.get("arms", {}).get(arm, {}).items():
+                if isinstance(v, (int, float)) and not isinstance(v, bool):
+                    metrics[f"{arm}.{k}"] = float(v)
+        for k, dd in card.get("deltas_api_minus_lora", {}).items():
+            if isinstance(dd, dict) and isinstance(dd.get("delta"), (int, float)):
+                metrics[f"delta.{k}"] = float(dd["delta"])
+        rid = log_eval_run(
+            run_name=results.get("name") or results.get("ts", "run"),
+            params=results.get("params", {}),
+            metrics=metrics,
+            tags={"arm": str(results.get("arm", ""))},
+            artifacts=artifacts,
+        )
+        log.info("mlflow_logged", run_id=rid)
+    except Exception as e:
+        log.warning("mlflow_skip", err=str(e)[:120])
+
+
 async def run(
     name: str, n: int, seed: int, temperature: float, max_tokens: int, n_boot: int
 ) -> None:
@@ -243,6 +292,7 @@ async def run(
             "n_boot": n_boot,
             "api_model": s.OPENAI_CHAT_MODEL,
             "lora_model": s.OLLAMA_MODEL,
+            "lora_model_sha256": _gguf_sha256(s.OLLAMA_MODEL),
             "lora_base_url": s.OLLAMA_BASE_URL,
             "eval_split": "eval_split_for (recipient-stratified, LoRA-disjoint)",
         },
@@ -260,6 +310,7 @@ async def run(
         json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8"
     )
     _print_summary(results)
+    _log_mlflow(results, [out_dir / "results.json"])
     log.info("wrote", dir=str(out_dir))
 
 

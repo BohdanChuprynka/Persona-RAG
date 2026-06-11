@@ -1,4 +1,4 @@
-= Building the replica
+= Building the replica <sec-build>
 
 This part is the implementation story: what it takes to make a model that texts
 like one specific person, and the design choices that the evaluation later has to

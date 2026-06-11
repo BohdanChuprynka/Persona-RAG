@@ -1,4 +1,4 @@
-= What we learned
+= What we learned <sec-learned>
 
 == The verdict
 
@@ -15,15 +15,16 @@ demonstrated voice advantage; it is a tie that cost, privacy, and offline capabi
 break toward the local model. And the pre-registered _primary_ channel — an unbiased
 human win-rate — is unresolved (recall bias; no outside raters). Stated cleanly:
 _the fine-tune beats the bare model on voice outright, matches the shipped product on
-voice, and wins decisively on cost, privacy, and offline operation._ These are surface
-metrics, not a certified _feels-like-me_ — but on the dimensions we can actually
-measure the conclusion is not in doubt: the local fine-tune is at least the equal of
-the shipped product on the measured register, and — once \$0 cost, privacy, and offline
-operation are counted — the better overall replica. The only thing left unresolved is
-the subjective human seal, and for the reasons below it may stay that way — a
-limitation on the validation, not a hole in the metric verdict. The headline reading of the study:
-_an elaborate production stack serves mainly to reach a tie with where a small local
-fine-tune already sits — and the residual differences are deployment, not voice._
+the measurable register, and wins decisively on cost, privacy, and offline operation._
+These are surface metrics, not a certified _feels-like-me_. On the dimensions we _can_
+measure, the fine-tune is at least the shipped product's equal on register and, once
+\$0 cost, privacy, and offline operation are counted, the better _deployment_. Whether
+it is the better _voice_ replica is deliberately left unclaimed: that rests on the
+pre-registered primary human channel, which is unresolved, and on surface proxies we
+cannot yet validate against it. So the honest headline is narrower than a winner, and
+more interesting: _an elaborate production stack serves mainly to reach a tie with
+where a small local fine-tune already sits — and the residual differences are
+deployment, not demonstrated voice._
 
 == Threats to validity
 
@@ -32,7 +33,11 @@ The result is honest only with its limits stated plainly.
 - *Construct validity.* Every automatic metric is a surface proxy; none measures
   "feels like the person" directly. The blind human panel is the only direct
   measure, and the metric↔human agreement that would validate the proxies cannot be
-  obtained here — an unbiased panel is precluded by the corpus's privacy.
+  obtained here — an unbiased panel is precluded by the corpus's privacy. A
+  literature-standard authorship-verification score @stamatatos2009survey would be a
+  stronger automatic proxy for voice than these surface statistics and is the
+  principled next metric; the repository wires one (a style-embedding `style_self_sim`)
+  but it is not yet promoted to a held-out-validated headline number.
 - *The human channel is doubly blocked, so the primary verdict is unresolved.* The
   only rater with standing is the owner, and he is _recall-biased_: he recognizes his
   own messages, so his ability to tell model from real conflates memory with voice.
@@ -40,12 +45,14 @@ The result is honest only with its limits stated plainly.
   pre-registered primary statistic (the human win-rate) is not merely unrated but
   hard to establish cleanly at all — a real limitation, not a to-do. The automatic
   arms carry the decision; the human read is a confounded corroborator.
-- *Single decode per item* at temperature 0.8 — and this is load-bearing for Arm A,
-  not a minor caveat. The bootstrap intervals resample item indices only, so they
-  capture which-items sampling noise but not decode stochasticity. The Arm-A length
-  gap is 3.6 characters: its CI excludes zero, but that gap is small enough to sit
-  within plausible re-decode noise, and nothing here shows it survives a re-decode. A
-  greedy or multi-seed pass would bound it; Arm B's 126-character gap is not at risk.
+- *Single headline decode per item* at temperature 0.8. The bootstrap intervals
+  resample item indices only, so they capture which-items sampling noise but not decode
+  stochasticity. This was load-bearing for Arm A — its length gap is only \~3.6
+  characters — so we re-decoded the LoRA arm twice more: the delta CI excludes zero in
+  all three decodes (Δ = 3.57, 4.05, 4.42; App. A), so the one surviving Arm-A edge
+  survives decode variance, even as the per-message effect stays a wash. The check
+  bounds decode noise on the arm where it mattered without fully characterising it; Arm
+  B's 126-character gap was never at risk.
 - *Leakage residual.* The legacy \~90% split-mismatch leak was found and fixed, both
   arms now score the recipient-stratified disjoint split, and the production arm runs
   a per-item retrieval guard. But that guard is _exact-match_ — it removes the gold
@@ -72,16 +79,19 @@ The result is honest only with its limits stated plainly.
   headline distances carry bootstrap CIs, but the tic metrics (exclamation rate,
   opener entropy) are *descriptive only* — they were _not_ given a Holm-Bonferroni
   correction, so where they point toward the fine-tune they should be read as
-  directional, not as tested wins. And the adapter, quantization, and `llama.cpp`
-  build hash are not pinned in the run record (MLflow logging is wired but uncalled) —
-  a reproducibility gap on the local-model numbers.
+  directional, not as tested wins. On provenance: the served GGUF is now pinned by
+  SHA-256 (App. A) and the comparison harness logs each run to MLflow, but the
+  `llama.cpp` build behind the originally-reported decodes is not separately stamped —
+  a reproducibility gap narrowed, not fully closed, on the local-model numbers.
 
 == Conclusion and future work
 
-A 3-billion-parameter local fine-tune reproduces one person's texting voice at least
-as faithfully as a fully-equipped frontier-API product — at zero marginal cost, no
-phone-home, and no leak surface — and the product's prompt-plus-retrieval-plus-lever
-machinery serves mainly to recover ground the fine-tune already holds.
+For one person, a 3-billion-parameter local fine-tune matches a fully-equipped
+frontier-API product on every surface register we can measure — at zero marginal cost,
+no phone-home, and no leak surface — while the product's prompt-plus-retrieval-plus-lever
+machinery serves mainly to recover ground the fine-tune already holds. Whether it is the
+better _voice_ replica, as opposed to the better _deployment_, is the question the
+(unresolved) human panel exists to answer.
 
 The clearest next steps follow the open threads. Rate the two built panels, turning
 the qualitative human verdict into a win-rate with a Wilson interval and running the
@@ -89,10 +99,10 @@ Turing test against the person's real replies. Add one or two raters for an
 inter-rater agreement check. The voice-versus-knowledge split already pointed past
 voice to grounding, and the layer built here (@sec-grounding) acts on it: a thin,
 intent-routed fact card lifts the local model's correct-identity-answer rate from 0.05
-to 0.33 with the voice intact, while only directionally trimming hallucination. The gap
-it exposes is the next target — a 3B model under-uses even a fact it is handed, so the
-remaining identity accuracy lives in a larger or grounding-tuned local model, not in
-more retrieval. And for a paper-grade leak-free claim,
-re-train the fine-tune on a single unified split and add a decode-variance
-robustness pass. The frontier is no longer "fine-tune or API" — that is settled — but
-"fine-tune versus the person".
+to 0.33 (question-clustered intervals disjoint) with the voice intact, while only
+directionally trimming hallucination. The gap it exposes is the next target — a 3B model
+under-uses even a fact it is handed, so the remaining identity accuracy lives in a larger
+or grounding-tuned local model, not in more retrieval. And for a paper-grade leak-free
+claim, re-train the fine-tune on a single unified split (the decode-variance robustness
+pass is now done, App. A). The frontier is no longer "fine-tune or API" — that question
+is answered on measurable register — but "fine-tune versus the person".

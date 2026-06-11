@@ -1,4 +1,4 @@
-= Absolute fidelity
+= Absolute fidelity <sec-absolute>
 
 Beating the baseline is the relative question. The harder, more interesting one is
 absolute: not "is the fine-tune better than the API", but "is it good enough to pass
@@ -78,7 +78,7 @@ reports the grounding layer built against that gap, and a probe that measures, o
 level field, what it actually buys.
 
 The mechanism is deliberately thin, because the fine-tune's whole value is a voice a
-heavy prompt destroys (Part II's dominant finding). Durable identity facts are
+heavy prompt destroys (the dominant finding of the two-arm comparison). Durable identity facts are
 distilled offline from the owner's own notes into a small store. At serving time an
 intent router reads the incoming message: a vague self-intro ("розкажи про себе") is
 left to the trained voice with no facts attached — in a casual register a recited
@@ -86,8 +86,8 @@ fact sheet is the wrong answer, and it is also where fabrication costs least —
 _specific_ factual question retrieves the matching identity facts and folds a short,
 in-language card into the system turn. The persona anchor stays byte-identical to
 training; the card is a brief addendum, and because the system turn is masked from the
-training loss it is a conditioning nudge, not the train/serve skew the thin invariant
-(Part I) exists to avoid.
+training loss it is a conditioning nudge, not the train/serve skew the thin
+train==serve invariant (@sec-build) exists to avoid.
 
 To measure it we run a bare-vs-grounded probe under the identical-prompt discipline of
 Arm B: the same local fine-tune answers 30 identity questions (five decodes each,
@@ -101,21 +101,24 @@ stratified hand-check agreed with the judge on 11 of 12 sampled labels.
 #figure(
   image("../fig/f12_grounding.png", width: 98%),
   caption: [Bare vs grounded local fine-tune, $n = 150$ generations per condition.
-  Left: grounding lifts the correct-fact rate from 0.05 to 0.33 (Wilson 95% intervals
-  disjoint) and lowers hallucination from 0.29 to 0.18 (intervals overlap — a
-  directional drop). Right: replies stay short (24 → 38 characters) and the "!" rate
-  stays at 0.00 — the card adds facts without moving the voice.],
+  Left: grounding lifts the correct-fact rate from 0.05 to 0.33 (question-clustered
+  95% intervals disjoint) and lowers hallucination from 0.29 to 0.18 (intervals
+  overlap — a directional drop). Right: replies stay short (24 → 38 characters) and the
+  "!" rate stays at 0.00 — the card adds facts without moving the voice.],
 ) <fig-grounding>
 
 The result is a clean win on correctness and an honest, partial one on hallucination
 (@fig-grounding). Handed no facts, the bare fine-tune confabulates fluently and in
 register — asked which city he lives in, it answers "London" or "Chicago" with the
-same casual confidence it brings to a real reply — and is correct on just *0.05*
-(95% CI 0.03–0.10) of generations, deflecting two-thirds of the time. The card raises
-the correct-fact rate to *0.33* (0.26–0.41): the intervals are disjoint, a real
-sixfold gain. Hallucination falls from *0.29* (0.22–0.36) to *0.18* (0.13–0.25), but
-here the Wilson intervals _overlap_, so by this report's own disjoint-interval rule
-the drop is directional, not certified. The voice is preserved throughout: the
+same casual confidence it brings to a real reply — and is correct on just *0.05* of
+generations (95% CI 0.01–0.12), deflecting two-thirds of the time. The card raises the
+correct-fact rate to *0.33* (0.19–0.47): a real sixfold gain whose interval is disjoint
+from the bare model's. These are _question-clustered_ intervals — a two-stage bootstrap
+that resamples the 30 probes, not the 150 correlated generations, so the five decodes
+per question cannot inflate the precision (a naive Wilson interval on $n = 150$ would
+understate the uncertainty; see Appendix E). Hallucination falls from *0.29* (0.16–0.43)
+to *0.18* (0.09–0.27), but here the clustered intervals _overlap_, so by this report's
+own disjoint-interval rule the drop is directional, not certified. The voice is preserved throughout: the
 exclamation rate stays at 0.00 and mean reply length rises only 24 → 38 characters —
 longer because the reply now carries a fact, still squarely inside the person's short
 register. (The Latin-script rate rises 0.48 → 0.59, but that is content, not drift:

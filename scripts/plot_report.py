@@ -288,10 +288,24 @@ def fig_grounding() -> None:
 
     classes = ["correct", "hallucinated", "deflected"]
     x = range(len(classes))
+    cc = res.get("cluster_ci")
     bvals = [bare["labels"][c]["rate"] for c in classes]
     gvals = [ground["labels"][c]["rate"] for c in classes]
-    berr = list(zip(*[_ci_err(bare["labels"][c]) for c in classes], strict=True))
-    gerr = list(zip(*[_ci_err(ground["labels"][c]) for c in classes], strict=True))
+    if cc:
+        # Question-clustered intervals (review fix #7): the K decodes per probe are
+        # correlated, so the honest CI resamples probes, not the pooled generations.
+        def _cl_err(side: str, c: str) -> tuple[float, float]:
+            d = cc[c][side]
+            lo, hi = d["ci"]
+            return (d["rate"] - lo, hi - d["rate"])
+
+        berr = list(zip(*[_cl_err("a", c) for c in classes], strict=True))
+        gerr = list(zip(*[_cl_err("b", c) for c in classes], strict=True))
+        ci_label = "question-clustered 95% CI"
+    else:
+        berr = list(zip(*[_ci_err(bare["labels"][c]) for c in classes], strict=True))
+        gerr = list(zip(*[_ci_err(ground["labels"][c]) for c in classes], strict=True))
+        ci_label = "Wilson 95% CI"
     ax1.bar(
         [i - w / 2 for i in x],
         bvals,
@@ -316,7 +330,7 @@ def fig_grounding() -> None:
     ax1.set_xticklabels(classes)
     ax1.set_ylim(0, 1)
     ax1.set_ylabel("share of generations")
-    ax1.set_title(f"Factual grounding (n={n}/condition, Wilson 95% CI)")
+    ax1.set_title(f"Factual grounding (n={n}/condition, {ci_label})")
     ax1.legend(loc="upper center", fontsize=8)
     _despine(ax1)
 

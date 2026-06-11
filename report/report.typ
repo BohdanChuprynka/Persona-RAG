@@ -44,8 +44,8 @@
     #align(left)[*Abstract.* Can a small local fine-tune replicate one person's
     texting voice — and how would you prove it? We build Persona-RAG, a Telegram bot
     that answers in its owner's voice, and ask whether a fine-tuned Qwen2.5-3B LoRA
-    texts more like him than the shipped gpt-4o-mini product (a \~1600-token
-    retrieval-augmented prompt with decode levers). Trust comes first: we document a
+    texts more like him than the shipped gpt-4o-mini product (a retrieval-augmented
+    \~1,600-token system prompt, \~2,400 tokens of total input, with decode levers). Trust comes first: we document a
     \~90% train/test leak in the original evaluation, found and fixed, then score both
     backends on a recipient-stratified, model-disjoint hold-out with paired bootstrap
     intervals under a pre-registered acceptance rule. A controlled arm isolates the
@@ -55,14 +55,18 @@
     on 292 of 299 messages) and matches the no-"!" register; fully equipped, the
     production machinery only pulls the API back to a _voice tie_ — at \$0.37 per
     thousand replies and an \~11× token tax against \$0 local — which cost, privacy, and
-    offline capability break toward the local model. On the dimensions we can measure,
-    then, the conclusion is clear: the local fine-tune is at least the equal of the
-    fully-equipped product and decisively beats the bare model — the better replica of
-    the register, at zero cost. A thin, intent-routed grounding layer then addresses the
+    offline capability break toward the local model (its one surviving distributional
+    edge holds across three independent re-decodes, so it is not sampling noise). Stated
+    as strongly as the evidence allows: on the surface metrics we can measure, the local
+    fine-tune _decisively beats the bare model_ and is _statistically indistinguishable
+    from the fully-equipped product_ — parity, not superiority, in the shipped config, but
+    the equal of the register at zero cost, for this one persona. A thin, intent-routed
+    grounding layer then addresses the
     fine-tune's one structural weakness — that it cannot know facts it was never told:
     distilling identity facts from the owner's own notes lifts its correct-identity-
-    answer rate from 0.05 to 0.33 with the voice intact, making the voice/knowledge
-    split actionable. What these surface metrics cannot certify is the
+    answer rate from 0.05 to 0.33 (question-clustered 95% intervals disjoint) with the
+    voice intact, while trimming hallucination only directionally — making the
+    voice/knowledge split actionable. What these surface metrics cannot certify is the
     subjective "feels like me"; that pre-registered _primary_ check (a blind human
     win-rate) is unresolved here, because the only rater with standing (the author) is
     recall-biased and privacy precludes outside raters — a real limitation, not a gap
@@ -72,10 +76,13 @@
 
 #v(0.6em)
 
+#include "parts/part0_intro.typ"
+#include "parts/related.typ"
 #include "parts/part1.typ"
 #include "parts/part2.typ"
 #include "parts/part3.typ"
 #include "parts/part4.typ"
+#include "parts/ethics.typ"
 #include "parts/part5.typ"
 #include "parts/appendix.typ"
 

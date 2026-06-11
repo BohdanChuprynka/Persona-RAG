@@ -1,4 +1,13 @@
-"""Persona-accuracy eval for Persona-RAG.
+"""Persona-accuracy eval for Persona-RAG (LEGACY single-arm scorecard).
+
+WARNING — leaky for the LoRA. This scores ONE backend on the *temporal* ``eval_split``
+(the most recent 10% of turns). The fine-tune held out the recipient-stratified
+``eval_split_for`` split, which is ~90% DISJOINT from this temporal one — so scoring the
+LoRA here puts ~90% of its own training turns in the "held-out" set, the exact leak the
+report documents and fixes. Use ``scripts/compare_persona.py`` (``make compare``) or
+``scripts/compare_persona_armA.py`` (``make compare-arma``) for any fair API-vs-LoRA
+comparison; this runner is retained only as the leak's demonstration / a quick API-only
+sanity check.
 
 Samples held-out persona turns (eval_split=1), replays each through the full
 LangGraph with its REAL prior context injected as session, and scores the

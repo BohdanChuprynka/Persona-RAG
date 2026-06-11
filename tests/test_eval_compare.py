@@ -8,6 +8,7 @@ from persona_rag.eval.compare import (
     arm_summary,
     bucket_tells,
     build_turing_kit,
+    cluster_bootstrap_rate_ci,
     compare_scorecard,
     copy_leak_rate,
     distinct_reply_rate,
@@ -260,3 +261,46 @@ def test_build_turing_kit_deterministic() -> None:
     b2, k2 = build_turing_kit(pairs, n=8, seed=7)
     assert [x["item_id"] for x in b1] == [x["item_id"] for x in b2]
     assert k1 == k2
+
+
+def test_cluster_bootstrap_point_estimate_and_determinism() -> None:
+    # 4 probes x 5 decodes; b is 2/5 "hit" per probe -> pooled b-rate = 0.4, a-rate = 0.0.
+    a = [["x"] * 5 for _ in range(4)]
+    b = [["hit", "hit", "x", "x", "x"] for _ in range(4)]
+    r1 = cluster_bootstrap_rate_ci(a, b, "hit", n_boot=2000, seed=0)
+    r2 = cluster_bootstrap_rate_ci(a, b, "hit", n_boot=2000, seed=0)
+    assert r1 == r2  # deterministic given seed
+    assert r1["a"]["rate"] == 0.0
+    assert math.isclose(r1["b"]["rate"], 0.4)
+    assert math.isclose(r1["delta_b_minus_a"], 0.4)
+    assert r1["n_probes"] == 4
+
+
+def test_cluster_bootstrap_clear_separation_excludes_zero() -> None:
+    # bare never correct, grounded always correct -> delta must exclude zero, disjoint.
+    a = [["deflected"] * 5 for _ in range(30)]
+    b = [["correct"] * 5 for _ in range(30)]
+    r = cluster_bootstrap_rate_ci(a, b, "correct", n_boot=3000, seed=1)
+    assert r["delta_excludes_zero"] is True
+    assert r["intervals_disjoint"] is True
+    assert r["delta_ci"][0] > 0
+
+
+def test_cluster_bootstrap_no_difference_spans_zero() -> None:
+    # identical conditions -> delta CI must include zero (not a real difference).
+    groups = [["correct", "x", "x", "x", "x"] for _ in range(30)]
+    r = cluster_bootstrap_rate_ci(groups, list(groups), "correct", n_boot=3000, seed=2)
+    assert r["delta_excludes_zero"] is False
+    assert r["delta_ci"][0] <= 0.0 <= r["delta_ci"][1]
+
+
+def test_cluster_bootstrap_wider_than_pooled_wilson() -> None:
+    # The clustered interval must be WIDER than a naive Wilson on pooled n,
+    # because decodes within a probe are perfectly correlated here.
+    # 2 of 6 probes are all-correct, the other 4 all-deflected (pooled 10/30).
+    a = [["deflected"] * 5 for _ in range(6)]
+    b = [["correct"] * 5 if i < 2 else ["deflected"] * 5 for i in range(6)]
+    r = cluster_bootstrap_rate_ci(a, b, "correct", n_boot=4000, seed=0)
+    w_lo, w_hi = wilson_ci(10, 30)  # pooled: 10/30 correct
+    clustered_width = r["b"]["ci"][1] - r["b"]["ci"][0]
+    assert clustered_width > (w_hi - w_lo)

@@ -41,6 +41,7 @@ os.chdir(_REPO_ROOT)
 from openai import AsyncOpenAI  # noqa: E402
 
 from persona_rag.config import get_settings  # noqa: E402
+from persona_rag.eval.compare import cluster_bootstrap_rate_ci  # noqa: E402
 from persona_rag.eval.grounding import (  # noqa: E402
     aggregate_labels,
     parse_judge_label,
@@ -224,6 +225,16 @@ async def run(
             }
             for r in records
         ],
+    }
+
+    # Question-clustered CIs (review fix #7): the K decodes per probe are
+    # correlated, so the pooled-n Wilson interval overstates precision. Resample
+    # probes (the independent unit), not generations. a=bare, b=grounded.
+    _bare_pp = [r["bare_labels"] for r in records]
+    _grnd_pp = [r["grounded_labels"] for r in records]
+    result["cluster_ci"] = {
+        lab: cluster_bootstrap_rate_ci(_bare_pp, _grnd_pp, lab)
+        for lab in ("correct", "hallucinated", "deflected")
     }
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
