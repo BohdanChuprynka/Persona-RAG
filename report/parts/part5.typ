@@ -5,8 +5,9 @@
 Under the rule fixed in advance, the decision favors the fine-tune — but the strength
 of the claim differs sharply by arm, and it is worth being precise. On a level field
 (Arm B) the fine-tune is decisively closer to the person's reply length — a large,
-per-item-consistent effect — and matches the no-`!` register, with shape a tie: a
-genuine voice win over the bare model. In the shipped configuration (Arm A), the
+per-item-consistent effect — and matches the no-`!` register, while also beating the
+same-family no-LoRA Qwen base on the measured register: a genuine voice win over the
+bare models. In the shipped configuration (Arm A), the
 API's full machinery pulls it to a _voice tie_ on the automatic metrics — shape, the
 `!` register, and, per individual message, reply length are all statistical ties (the
 fine-tune keeps only a distributional length edge and more varied openers, the latter
@@ -14,7 +15,7 @@ uncorrected for multiple comparisons). The shipped-arm decision is therefore not
 demonstrated voice advantage; it is a tie that cost, privacy, and offline capability
 break toward the local model. And the pre-registered _primary_ channel — an unbiased
 human win-rate — is unresolved (recall bias; no outside raters). Stated cleanly:
-_the fine-tune beats the bare model on voice outright, matches the shipped product on
+_the fine-tune beats the bare models on voice outright, matches the shipped product on
 the measurable register, and wins decisively on cost, privacy, and offline operation._
 These are surface metrics, not a certified _feels-like-me_. On the dimensions we _can_
 measure, the fine-tune is at least the shipped product's equal on register and, once

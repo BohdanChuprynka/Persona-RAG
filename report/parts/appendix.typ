@@ -50,6 +50,7 @@ throughout.
   ),
   table.hline(stroke: 0.4pt),
   [main (B)], [300], [0.052 / 0.024], [128.8 / 2.9], [0.65 / 0.00], [0.949], [0.082],
+  [base-Qwen (B ctrl.)], [300], [0.114 / —], [88.1 / —], [0.22 / —], [—], [—],
   [seed1 (B)], [150], [0.081 / 0.042], [134.7 / 1.5], [0.62 / 0.00], [—], [0.089],
   [armA (A)], [300], [0.035 / 0.034], [6.97 / 3.41], [0.00 / 0.00], [0.043], [0.370],
   [armA-learned (A)], [300], [0.034 / 0.018], [7.24 / 2.97], [0.03 / 0.00], [—], [0.371],
@@ -57,7 +58,9 @@ throughout.
 ),
 The $n = 60$ leak-ablation arms (`armA_leakon` / `armA_leakoff`) are underpowered and
 omitted here; their only role is the leak-guard proof (@fig-leak) and the forest plot
-(@fig-forest). "A/L" = API / LoRA; LoRA cost is \$0 (local) throughout.
+(@fig-forest). "A/L" = API / LoRA; the base-Qwen row is the same-family no-LoRA
+control scored from `data/eval/compare/base_qwen/pairs.jsonl`; LoRA cost is \$0
+(local) throughout.
 
 == D · Supporting distributions
 

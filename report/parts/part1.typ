@@ -94,8 +94,11 @@ the target machine shipped no inference runtime).
 
 Why fine-tune at all, rather than prompt harder? Message _shape_ was already solved
 by prompt shape-conditioning. But lexical voice — the code-switch, opener variety,
-the `)` tic, the absent `!` — does not respond to soft prompt instructions: the base
-model obeys hard per-reply directives but ignores style requests. Those tics had to
-be learned from the data. The production API path compensates differently, with two
-decode levers (a positive logit bias on the `)` token, a strong negative bias on `!`)
-and per-reply register directives — machinery the next part puts on trial.
+the `)` tic, the absent `!` — is where the adapter matters. The same-family
+no-LoRA Qwen control in Arm B makes this measured rather than assumed: under the
+identical thin prompt, base Qwen is still far from the person on shape (JS 0.114),
+length ($W_1 = 88.1$), `!` rate (0.224), code-switching (0.115 Latin), and `)`
+smileys (0.018) while the LoRA lands much closer on the headline register metrics
+(@tab-armB). The production API path compensates differently, with two decode levers
+(a positive logit bias on the `)` token, a strong negative bias on `!`) and per-reply
+register directives — machinery the next part puts on trial.

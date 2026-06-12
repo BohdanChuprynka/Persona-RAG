@@ -58,9 +58,10 @@
     offline capability break toward the local model (its one surviving distributional
     edge holds across three independent re-decodes, so it is not sampling noise). Stated
     as strongly as the evidence allows: on the surface metrics we can measure, the local
-    fine-tune _decisively beats the bare model_ and is _statistically indistinguishable
-    from the fully-equipped product_ — parity, not superiority, in the shipped config, but
-    the equal of the register at zero cost, for this one persona. A thin, intent-routed
+    fine-tune _decisively beats the bare models_ — both bare gpt-4o-mini and the
+    same-family no-LoRA Qwen control — and is _statistically indistinguishable from the
+    fully-equipped product_ — parity, not superiority, in the shipped config, but the
+    equal of the register at zero cost, for this one persona. A thin, intent-routed
     grounding layer then addresses the
     fine-tune's one structural weakness — that it cannot know facts it was never told:
     distilling identity facts from the owner's own notes lifts its correct-identity-

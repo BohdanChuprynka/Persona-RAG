@@ -7,36 +7,42 @@ size that keeps the answer honest.
 
 == Arm B: on a level playing field
 
-Under the identical thin prompt, the fine-tune is decisively closer on length and
-matches the no-`!` rule exactly, while message shape is a statistical tie. The
-result replicates across two seeds (@tab-armB, @fig-armB).
+Under the identical thin prompt, the fine-tune is decisively closer on length,
+matches the no-`!` rule exactly, and improves over its own no-LoRA base as well as
+over bare gpt-4o-mini. Message shape remains a statistical API-vs-LoRA tie, but the
+same-family base control is worse than both. The result replicates across two seeds
+(@tab-armB, @fig-armB).
 
 #figure(
   table(
-    columns: 6,
+    columns: 7,
     stroke: none,
-    inset: (x: 5pt, y: 5pt),
-    align: (left, right, right, right, left, center),
+    inset: (x: 4pt, y: 5pt),
+    align: (left, right, right, right, right, left, center),
     table.hline(),
-    table.header([Metric], [API], [LoRA], [Real], [Δ API−LoRA (95% CI)], [verdict]),
+    table.header([Metric], [API], [Base], [LoRA], [Real], [Δ API−LoRA (95% CI)], [verdict]),
     table.hline(stroke: 0.4pt),
-    [Message shape (JS, ↓0)], [0.052], [0.024], [0], [+0.028 (-0.014, 0.073)], [tie],
-    [Reply length ($W_1$, ↓0)], [128.8], [*2.9*], [0], [+125.9 (107.6, 142.4)], [*LoRA*],
-    [Exclamation rate (→)], [0.651], [*0.000*], [0.00], [—], [LoRA],
-    [Code-switch (Latin, →)], [0.023], [*0.260*], [0.235], [—], [LoRA],
-    [Opener entropy (→)], [5.02], [*5.77*], [6.96], [—], [LoRA],
-    [Cost / 1k replies], [\$0.082], [*\$0*], [—], [—], [LoRA],
+    [Message shape (JS, ↓0)], [0.052], [0.114], [0.024], [0], [+0.028 (-0.014, 0.073)], [tie],
+    [Reply length ($W_1$, ↓0)], [128.8], [88.1], [*2.9*], [0], [+125.9 (107.6, 142.4)], [*LoRA*],
+    [Exclamation rate (→)], [0.651], [0.224], [*0.000*], [0.00], [—], [LoRA],
+    [Code-switch (Latin, →)], [0.023], [0.115], [*0.260*], [0.235], [—], [LoRA],
+    [Opener entropy (→)], [5.02], [5.33], [*5.77*], [6.96], [—], [LoRA],
+    [Cost / 1k replies], [\$0.082], [—], [*\$0*], [—], [—], [LoRA],
     table.hline(),
   ),
   caption: [Arm B (controlled), $n = 300$, replicated at $n = 150$ seed 1. Identical
-  thin prompt to both backends. *Real* is the person's own held-out value — the
+  thin prompt to all model conditions; *Base* is Qwen2.5-3B-Instruct without the LoRA
+  adapter, scored from Colab-generated pairs with the same repository metrics. *Real*
+  is the person's own held-out value — the
   target: distance metrics (↓0) aim at zero, rate metrics (→) aim at the Real value.
   The length win is large and its CI excludes zero in both seeds; on the rate rows the
   LoRA is closer to the person on every count — notably the code-switch register, which
-  the API essentially drops (0.02 vs the person's 0.24). Two honest notes: both
-  backends still undershoot the person's opener variety (6.96), and both barely produce
-  the `)` smiley (real rate 0.051, API 0.004, LoRA 0.008 — a tic the bare LoRA does
-  _not_ reproduce). Rate rows are descriptive (no CI / multiple-comparison correction).],
+  the API essentially drops (0.02 vs the person's 0.24), while the no-LoRA base only
+  partially recovers (0.115). Two honest notes: all generated conditions still
+  undershoot the person's opener variety (6.96), and even the LoRA barely produces the
+  `)` smiley (real rate 0.051, API 0.004, base 0.018, LoRA 0.008 — a tic the bare LoRA
+  does _not_ reproduce). Rate rows are descriptive (no CI / multiple-comparison
+  correction).],
 ) <tab-armB>
 
 #figure(

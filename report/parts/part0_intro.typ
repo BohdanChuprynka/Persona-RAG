@@ -43,7 +43,8 @@ as _primary_ and, candidly, cannot resolve:
   for reasons of rater bias and privacy (@sec-ethics) it cannot be cleanly
   established here.
 + *RQ1.* On measurable surface register, does the local fine-tune sound more like
-  the person than (a) the bare base-model API and (b) the fully-equipped product?
+  the person than (a) bare gpt-4o-mini, (b) the same-family no-LoRA Qwen base, and
+  (c) the fully-equipped product?
 + *RQ2.* What does the production scaffold — rich prompt, retrieval, decode levers —
   actually _contribute_ over the bare weights?
 + *RQ3.* Can the comparison be _trusted_: a leak-free split, a rule fixed in
@@ -58,9 +59,10 @@ as _primary_ and, candidly, cannot resolve:
   with a leak-free, pre-registered, two-arm (model-vs-product) comparison carrying
   paired bootstrap intervals and a per-item retrieval guard (@sec-build, @sec-trust).
 - *A like-for-like verdict.* On a level field the fine-tune is decisively closer to
-  the person's reply length and code-switch register and matches the no-`!` rule;
-  fully equipped, the product's machinery only reaches a _tie_ — a result we
-  decode-robustness-check across three independent re-decodes (@sec-relative).
+  the person's reply length and code-switch register, matches the no-`!` rule, and
+  beats the same-family no-LoRA Qwen base; fully equipped, the product's machinery
+  only reaches a _tie_ — a result we decode-robustness-check across three independent
+  re-decodes (@sec-relative).
 - *An anatomy of the scaffold.* We isolate what the prompt-plus-retrieval-plus-lever
   stack buys on the API side, and show it mostly recovers ground the bare fine-tune
   already held (@sec-relative).
