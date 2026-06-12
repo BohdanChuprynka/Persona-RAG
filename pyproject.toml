@@ -72,9 +72,10 @@ disallow_incomplete_defs = true
 
 [[tool.mypy.overrides]]
 # Third-party deps without type stubs or a py.typed marker: langdetect (core,
-# installed, untyped) and sentence-transformers (optional style-embedding scorer,
-# not installed in CI, import guarded at runtime).
-module = ["langdetect.*", "sentence_transformers.*"]
+# installed, untyped), sentence-transformers (optional style-embedding scorer,
+# not installed in CI, import guarded at runtime), and scikit-learn (the validated
+# author detector, lazily imported in persona_rag/eval/authorship_detect.py).
+module = ["langdetect.*", "sentence_transformers.*", "sklearn.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

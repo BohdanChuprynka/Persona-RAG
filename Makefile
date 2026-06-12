@@ -98,7 +98,7 @@ clean:
 	rm -rf .pytest_cache .ruff_cache .mypy_cache build dist *.egg-info
 	find . -type d -name __pycache__ -exec rm -rf {} +
 
-.PHONY: insights insights-full insights-dry insights-vault compare-vault
+.PHONY: insights insights-full insights-dry insights-vault compare-vault authorship compare-base
 
 insights:
 	uv run python scripts/distill_insights.py --mode incremental
@@ -121,3 +121,15 @@ insights-vault:
 # personal -> gitignored under reports/main/grounding/.
 compare-vault:
 	uv run python scripts/probe_grounding.py
+
+# Validated author detector (review fix #2): trains a char-n-gram detector on the
+# train split, validates held-out ROC-AUC (owner vs correspondents), and applies it to
+# each backend's generations as a calibrated voice metric. sklearn-only, no GPU.
+authorship:
+	uv run python scripts/authorship_validation.py
+
+# Base-Qwen no-LoRA ablation (review fix #9): scores base Qwen2.5-3B-Instruct on the
+# SAME thin controlled-arm prompt as `make compare`, to isolate what the LoRA added.
+# Needs a hosted OpenAI-compatible Qwen endpoint (BASE_QWEN_BASE_URL/MODEL/API_KEY); no GPU.
+compare-base:
+	uv run python scripts/base_qwen_arm.py

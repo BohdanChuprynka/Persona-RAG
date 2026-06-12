@@ -34,10 +34,13 @@ The result is honest only with its limits stated plainly.
   "feels like the person" directly. The blind human panel is the only direct
   measure, and the metric↔human agreement that would validate the proxies cannot be
   obtained here — an unbiased panel is precluded by the corpus's privacy. A
-  literature-standard authorship-verification score @stamatatos2009survey would be a
-  stronger automatic proxy for voice than these surface statistics and is the
-  principled next metric; the repository wires one (a style-embedding `style_self_sim`)
-  but it is not yet promoted to a held-out-validated headline number.
+  literature-standard authorship detector @stamatatos2009survey, built and validated
+  here (@sec-relative), _corroborates_ rather than transcends the surface metrics:
+  per-message lexical authorship in this casual register is thin (held-out ROC-AUC 0.57),
+  and the strong reply-level detector (AUC 0.99) is mostly length and structure. It
+  confirms the LoRA matches the owner's reply distribution where the bare API does not,
+  but supplies no _independent_ lexical-voice validation — so the human panel remains the
+  only route to certifying "feels like me".
 - *The human channel is doubly blocked, so the primary verdict is unresolved.* The
   only rater with standing is the owner, and he is _recall-biased_: he recognizes his
   own messages, so his ability to tell model from real conflates memory with voice.

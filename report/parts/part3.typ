@@ -183,6 +183,37 @@ but not proven flush with the floor either.
   as a reference band. The LoRA sits just above the floor; the API rarely reuses text.],
 ) <fig-copy>
 
+== Stylometric corroboration: a validated author detector
+
+Every metric so far is a surface proxy. As an independent check we ask, with a
+literature-standard tool, whether they cohere under an actual model of authorship
+@stamatatos2009survey: a character-n-gram detector trained to separate the owner's real
+replies from his correspondents' messages on the train split, _validated held-out_ on
+the eval split before anything is read into it (`make authorship`).
+
+Two readings fall out, and both are kept because they disagree usefully. At the
+_message_ level — individual messages on both sides, the comparable unit — per-message
+authorship is *thin*: the detector clears chance only modestly (ROC-AUC 0.57, 95% CI
+0.56–0.58), and a length-only baseline is below chance (0.47), so what little signal
+exists is lexical, not length. Short casual texts are nearly anonymous — itself a
+construct finding, and part of why voice here must be read from aggregate structure
+rather than per-message fingerprints. At the _reply_ level — the owner's whole reply
+against a correspondent's context block, the unit a generation actually is — the
+detector validates strongly (AUC 0.99, CI 0.98–0.99), but a length-only baseline
+already reaches 0.96, so it is mostly capturing length and structure, not isolated
+lexical style.
+
+Read with that caveat, the reply-level detector _reproduces the two-arm verdict on an
+independent instrument_. On a level field (Arm B) the LoRA's replies are
+indistinguishable from the owner's — detector P(owner) *0.91* against the real *0.91* —
+while the bare API is rejected at the strangers' floor (*0.44*); fully equipped (Arm A),
+the production machinery lifts the API to parity (*0.91*), exactly as the length distance
+did. The author detector therefore _corroborates_ the structural metrics rather than
+overturning them; and because its strongest form is length-dominated while its
+length-independent form is weak, it points at the same conclusion the rest of the report
+reaches — the measurable register is settled, and the residual "feels like me" is a human
+question, not one more automatic metric.
+
 == The operational case
 
 Finally, the deployment trade-off (@fig-ops). The two are near-parity on median
