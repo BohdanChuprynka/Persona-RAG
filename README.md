@@ -8,6 +8,14 @@
 
 Persona-RAG is a LangGraph-orchestrated retrieval-augmented Telegram bot that replies in your voice, grounded in your own exported chat history. You feed it your Telegram and Instagram exports, it indexes them into Qdrant, and approved friends can DM a persona that talks like you. One Telegram pipeline drives two interchangeable backends: a retrieval-augmented `gpt-4o-mini` (your real past replies as few-shot examples) and a locally fine-tuned Qwen2.5-3B LoRA served on a thin, train-equals-serve prompt. A rigorous evaluation (see [Research](#research)) finds the local fine-tune at least matches the fully-equipped API product on the measurable voice register — at \$0 marginal cost.
 
+## Demo
+
+Same messages, side by side — the cloud `gpt-4o-mini` API vs the free, locally fine-tuned `qwen-3b + lora`:
+
+![Persona-RAG demo: gpt-4o-mini vs a local Qwen-3B LoRA on identical prompts](docs/assets/persona-rag-demo.gif)
+
+The left column meters cost live in dollars; the right runs on-device at \$0. Every reply is real model output — non-English (Ukrainian) replies are glossed to English. ▶ [Higher-quality MP4](docs/assets/persona-rag-demo.mp4).
+
 ## Research
 
 This project includes a full, leak-audited evaluation, written up as a research report:

@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Replicating a Texting Voice</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400;1,9..144,500&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#141310; --ink:#ece7dc; --ink-soft:#b3ac9d;
+    --gold:#c89c52; --gold-soft:#dcbb7e;
+    --panel:#1c1a15; --reply:#2a2720; --dim:#8c8676; --line:#322e26;
+    --serif:"Fraunces",Georgia,serif;
+    --sans:"IBM Plex Sans",-apple-system,system-ui,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;}
+  body{
+    background:var(--paper);
+    background-image:repeating-linear-gradient(90deg,rgba(255,255,255,.022) 0 1px,transparent 1px 72px);
+    color:var(--ink); font-family:var(--sans);
+    -webkit-font-smoothing:antialiased; padding:52px 28px 52px;
+  }
+  .container{max-width:900px;margin:0 auto;}
+
+  #banner{display:none;font-family:var(--mono);font-size:11.5px;letter-spacing:.01em;
+    color:var(--gold);background:rgba(200,156,82,.09);border:1px solid rgba(200,156,82,.3);
+    border-radius:7px;padding:7px 12px;margin-bottom:30px;}
+  #banner b{color:var(--ink);font-weight:600;}
+  #banner button{float:right;background:none;border:none;color:var(--gold);cursor:pointer;}
+
+  .masthead{text-align:center;margin:4px 0 36px;}
+  h1{font-family:var(--serif);font-weight:500;font-size:43px;line-height:1.05;
+    letter-spacing:-.02em;margin:0;}
+  .byline{font-family:var(--mono);font-size:11px;font-weight:500;letter-spacing:.2em;
+    text-transform:uppercase;color:var(--dim);margin:15px 0 0;}
+  .byline b{color:var(--gold);font-weight:500;}
+
+  .wrap{display:flex;gap:18px;align-items:stretch;}
+  .col{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:15px;
+    box-shadow:0 26px 54px -30px rgba(0,0,0,.7),0 2px 6px -3px rgba(0,0,0,.4);
+    display:flex;flex-direction:column;overflow:hidden;}
+  .col-head{padding:16px 18px 14px;border-bottom:1px solid var(--line);
+    display:flex;align-items:flex-end;justify-content:space-between;gap:10px;}
+  .who{font-family:var(--mono);font-size:11px;font-weight:500;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--dim);margin:0 0 7px;}
+  .cost{font-family:var(--serif);font-weight:500;font-size:27px;line-height:1;
+    color:var(--gold);letter-spacing:-.01em;}
+  .cost .u{font-size:14px;color:var(--gold-soft);}
+  .meter{font-family:var(--mono);font-size:11px;color:var(--dim);text-align:right;
+    white-space:nowrap;padding-bottom:3px;}
+
+  .chat{height:478px;overflow-y:auto;padding:16px 17px;display:flex;flex-direction:column;}
+  .chat::-webkit-scrollbar{width:7px;} .chat::-webkit-scrollbar-thumb{background:#3a3529;border-radius:4px;}
+
+  .msg{max-width:82%;padding:8px 12px;font-size:14.5px;line-height:1.4;margin:3px 0;
+    border-radius:14px;overflow-wrap:anywhere;animation:pop .26s cubic-bezier(.2,.8,.2,1);}
+  @keyframes pop{from{opacity:0;transform:translateY(5px) scale(.985);}to{opacity:1;transform:none;}}
+  .user{background:var(--ink);color:var(--paper);margin-left:auto;border-bottom-right-radius:5px;}
+  .reply{background:var(--reply);color:var(--ink);margin-right:auto;border-bottom-left-radius:5px;}
+  .gloss{font-family:var(--serif);font-style:italic;font-size:13.5px;color:var(--dim);
+    margin:1px 0 6px 4px;}
+  .gloss.right{text-align:right;margin:1px 4px 7px 0;}
+
+  .typing{background:var(--reply);border-radius:14px;border-bottom-left-radius:5px;
+    width:fit-content;margin:3px auto 3px 0;padding:11px 13px;animation:pop .2s ease;}
+  .typing span{display:inline-block;width:6px;height:6px;border-radius:50%;background:#a8a293;
+    margin:0 2px;animation:blink 1.2s infinite both;}
+  .typing span:nth-child(2){animation-delay:.2s;} .typing span:nth-child(3){animation-delay:.4s;}
+  @keyframes blink{0%,80%,100%{opacity:.25}40%{opacity:1}}
+
+  /* transport controls */
+  .controls{display:flex;gap:10px;margin-top:22px;}
+  .ctl{font-family:var(--mono);font-size:11.5px;font-weight:500;letter-spacing:.12em;
+    text-transform:uppercase;cursor:pointer;padding:10px 18px;border-radius:9px;
+    border:1px solid var(--line);background:transparent;color:var(--ink-soft);
+    transition:transform .12s,background .15s,color .15s,opacity .15s,border-color .15s;}
+  .ctl:hover{transform:translateY(-1px);color:var(--ink);border-color:var(--dim);}
+  #btnPlay{background:var(--gold);color:#1a1611;border-color:var(--gold);}
+  #btnPlay:hover{color:#1a1611;border-color:var(--gold-soft);background:var(--gold-soft);}
+  .ctl:disabled{opacity:.35;cursor:default;transform:none;color:var(--ink-soft);border-color:var(--line);}
+
+  .reveal{opacity:0;transform:translateY(15px);animation:rise .85s cubic-bezier(.2,.7,.2,1) forwards;}
+  @keyframes rise{to{opacity:1;transform:none;}}
+  @media (max-width:680px){ .wrap{flex-direction:column;} h1{font-size:31px;} body{padding:34px 18px;} }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div id="banner">
+    <button onclick="this.parentNode.style.display='none'">✕</button>
+    <b>Preview data.</b> the replies below are illustrative — run your two backends on these
+    prompts and paste the <b>real</b> outputs into <code>DATA[]</code>, then set <code>PREVIEW_DATA = false</code>.
+  </div>
+
+  <header class="masthead reveal" style="animation-delay:.06s">
+    <h1>Replicating a Texting Voice</h1>
+    <p class="byline">Bohdan Chuprynka · <b>$0.37/1k</b> api &nbsp;vs&nbsp; <b>$0</b> local</p>
+  </header>
+
+  <div class="wrap">
+    <div class="col reveal" style="animation-delay:.26s">
+      <div class="col-head">
+        <div>
+          <p class="who">gpt-4o-mini</p>
+          <div class="cost">$0.37<span class="u"> / 1k</span></div>
+        </div>
+        <div class="meter" id="apiMeter">≈ 0 tok · $0.0000</div>
+      </div>
+      <div class="chat" id="apiChat"></div>
+    </div>
+
+    <div class="col reveal" style="animation-delay:.34s">
+      <div class="col-head">
+        <div>
+          <p class="who">qwen-3b + lora</p>
+          <div class="cost">$0<span class="u"> · local</span></div>
+        </div>
+        <div class="meter">$0.0000</div>
+      </div>
+      <div class="chat" id="loraChat"></div>
+    </div>
+  </div>
+
+  <div class="controls reveal" style="animation-delay:.44s">
+    <button id="btnPlay"  class="ctl" onclick="pauseToggle()">▶ Start</button>
+    <button id="btnStop"  class="ctl" onclick="stopPlay()" disabled>■ Stop</button>
+    <button id="btnSpeed" class="ctl" onclick="cycleSpeed()">1× Speed</button>
+  </div>
+
+</div>
+
+<script>
+/* ──────────────────────────────────────────────────────────────────────────
+   Replace the pairs with your REAL model outputs (keep the English prompts).
+   bubble = { t:"text", g:"short casual english gloss" }.  g shows only when the
+   text has Cyrillic (auto-detected) — use null for English. Then PREVIEW_DATA=false.
+   The persona types at a real ~60 WPM (longer message → longer to type); the API
+   isn't typing, it just has latency, then drops its whole reply.
+   ────────────────────────────────────────────────────────────────────────── */
+/* Two datasets, one switch. PREVIEW = the illustrative placeholders we designed
+   against; REAL = genuine captured model outputs (never edited by hand). Flip
+   USE_REAL once DATA_REAL is filled by scripts/capture_demo_pairs.py.          */
+const USE_REAL = true;    // ← false = preview placeholders · true = real outputs
+const AUTOPLAY = false;   // ← true = self-start on load (for an embedded page)
+
+const DATA_PREVIEW = [
+  { prompt:"hey, how's it going?",
+    api:[{t:"I'm doing great, thanks for asking! 😊 How can I help you today?"}],
+    lora:[{t:"норм)",g:"good)"},{t:"ти як",g:"you?"}] },
+
+  { prompt:"you around this weekend?",
+    api:[{t:"I don't have personal plans, but I'd be glad to help you plan yours! What did you have in mind?"}],
+    lora:[{t:"хз ще",g:"dunno yet"},{t:"а шо хотів?",g:"why, what's up?"}] },
+
+  // ── long burst — the personality reveal ──────────────────────────────────
+  { prompt:"did you make it to the gym today?",
+    api:[{t:"Nice — staying consistent really pays off for both energy and focus! What did you train today, push, pull, or legs?"}],
+    lora:[
+      {t:"та да, щойно прийшов",g:"yeah, just got back"},
+      {t:"ноги сьогодні",g:"legs today"},
+      {t:"присів 100 на 5, новий пр)",g:"squatted 100×5, new PR)"},
+      {t:"думав здохну на останньому",g:"thought i'd die on the last set"},
+      {t:"завтра встати не зможу хах",g:"won't be able to get up tomorrow haha"},
+      {t:"а ти ходив?",g:"did you go?"},
+    ] },
+
+  { prompt:"what do you think about the new iphone?",
+    api:[{t:"The new iPhone has a few solid upgrades — better cameras, a faster chip, improved battery. Whether it's worth it depends on your current phone."}],
+    lora:[{t:"та норм",g:"it's fine"},{t:"нічо особливого",g:"nothing special"}] },
+
+  { prompt:"how are you even awake right now lol",
+    api:[{t:"Haha — a good night's sleep is the best fix, but if you need a quick boost, some water or a short walk can help more than caffeine!"}],
+    lora:[{t:"кава + енергетик",g:"coffee + energy drink"},{t:"знаю знаю, погана звичка)",g:"i know, bad habit)"}] },
+
+  { prompt:"can you help me with my cv?",
+    api:[{t:"Of course! I'd be happy to help. Here are a few tips: 1) tailor it to each role, 2) quantify your achievements, 3) keep it to one page, 4) lead with impact…"}],
+    lora:[{t:"скинь",g:"send it"},{t:"гляну)",g:"i'll look)"}] },
+];
+
+// ── REAL captured outputs (scripts/capture_demo_pairs.py, both runs) ────────
+// Verbatim model output — replies never hand-edited. Glosses (g / pg) are
+// English translation aids I added; the guitar burst is trimmed to 6 of its 10
+// real bubbles for length (verbatim, in order). API replies left in their real
+// Ukrainian — the length itself is the "verbose assistant" contrast.
+const DATA_REAL = [
+  { prompt:"hey, how's it going?",
+    api:[{t:"Привіт! Та все ок, дякую. А як ти? Що нового?",g:"hi! all good, thanks. and you? what's new?"}],
+    lora:[{t:"Та тут все окей)",g:"all good here)"}] },
+
+  { prompt:"ходив сьогодні в зал?", pg:"did you hit the gym today?",
+    api:[{t:"Та ні, сьогодні не встиг. Як ти? Ходив?",g:"nah, didn't make it today. you? did you go?"}],
+    lora:[{t:"Нє",g:"nah"},{t:"Завтра",g:"tomorrow"}] },
+
+  { prompt:"you still playing guitar?",
+    api:[{t:"Так, іноді граю! Часом беру в руки і щось імпровізую. А ти? Граєш на чомусь?",g:"yeah, sometimes! i pick it up now and then and improvise. you? play anything?"}],
+    lora:[{t:"yes"},{t:"it is good"},{t:"i am learning"},{t:"it is hard"},{t:"but fun"},
+          {t:"I think i am going to play it for the rest of my life"}] },
+
+  { prompt:"what do you think about the new iphone?",
+    api:[{t:"Ну, новий айфон, як завжди, викликав багато обговорень. І знову оновлення камери, дизайн, нові кольори... Але, чесно кажучи, багато людей вже звикли до таких змін. Якщо у тебе є попередня модель, може, сенсу оновлюватись немає, але якщо ти фанат Apple, то, напевно, захочеться спробувати нові фішки. Що ти про нього думаєш?",g:"well, the new iphone got a lot of buzz as usual — camera updates, design, new colors again... but honestly people are used to these changes. if you've got the previous model, maybe no point upgrading; if you're an apple fan you'll probably want the new features. what do you think?"}],
+    lora:[{t:"i don't really care about it"},{t:"I would buy the 12 pro"},{t:"I have a 11"},{t:"And it is fine"}] },
+
+  { prompt:"how are you even awake right now lol",
+    api:[{t:"Та я просто в курсі, як важливо бути на зв'язку! 😄 А ти що, пізно сидиш?",g:"i just know how important it is to stay reachable! you up late?"}],
+    lora:[{t:"i just got home"},{t:"but I am not sleepy"},{t:"I have something to do"},{t:"I am going to go for a run"}] },
+];
+
+// the switch — falls back to PREVIEW if REAL is selected but still empty
+const DATA = (USE_REAL && DATA_REAL.length) ? DATA_REAL : DATA_PREVIEW;
+const PREVIEW_DATA = !(USE_REAL && DATA_REAL.length);
+
+const apiChat=document.getElementById('apiChat');
+const loraChat=document.getElementById('loraChat');
+const apiMeter=document.getElementById('apiMeter');
+const rand=(a,b)=>a+Math.random()*(b-a);
+const hasCyrillic=s=>/[Ѐ-ӿ]/.test(s);
+
+let runId=0, apiTokens=0, apiCost=0;
+let meterTok=0, meterCost=0, meterAnim=0;   // animated (displayed) meter state
+const COST_PER_REPLY=0.37/1000;             // $0.37 / 1k replies — the column's rate
+let state='idle';        // idle | playing | paused | stopped
+let speed=1;
+const SPEEDS=[1,1.5,2];
+
+/* a wait that is pausable (freezes), speed-aware (live), and stoppable (rejects) */
+function waitMs(ms){
+  return new Promise((resolve,reject)=>{
+    let remaining=ms, last=performance.now();
+    (function tick(){
+      if(state==='stopped') return reject('stop');
+      const now=performance.now(), dt=now-last; last=now;
+      if(state==='playing') remaining-=dt*speed;   // paused → no countdown
+      if(remaining<=0) return resolve();
+      setTimeout(tick,30);
+    })();
+  });
+}
+
+const WPM=60, CPS=WPM*5/60;                          // 5 chars / second
+function humanType(s){ return rand(260,620)+(s.length/CPS)*1000*rand(0.92,1.12); }
+function apiLatency(s){ return Math.min(2600,1100+s.length*6)*rand(0.9,1.15); }
+
+function bubble(text,cls){const d=document.createElement('div');d.className='msg '+cls;d.textContent=text;return d;}
+function addUser(p,t,g){
+  p.appendChild(bubble(t,'user'));
+  if(g&&hasCyrillic(t)){const e=document.createElement('div');e.className='gloss right';e.textContent='↳ '+g;p.appendChild(e);}
+}
+function addReply(p,b){
+  p.appendChild(bubble(b.t,'reply'));
+  if(b.g&&hasCyrillic(b.t)){const g=document.createElement('div');g.className='gloss';g.textContent='↳ '+b.g;p.appendChild(g);}
+}
+function typing(p){const d=document.createElement('div');d.className='typing';d.innerHTML='<span></span><span></span><span></span>';p.appendChild(d);return d;}
+function scrollAll(){apiChat.scrollTop=apiChat.scrollHeight;loraChat.scrollTop=loraChat.scrollHeight;}
+function renderMeter(){apiMeter.textContent='≈ '+Math.round(meterTok)+' tok · $'+meterCost.toFixed(4);}
+function animateMeter(toTok,toCost){
+  const me=++meterAnim, fromTok=meterTok, fromCost=meterCost, t0=performance.now(), dur=650;
+  (function step(){
+    if(me!==meterAnim) return;
+    const k=Math.min(1,(performance.now()-t0)/dur), e=1-Math.pow(1-k,3);
+    meterTok=fromTok+(toTok-fromTok)*e; meterCost=fromCost+(toCost-fromCost)*e; renderMeter();
+    if(k<1) requestAnimationFrame(step); else { meterTok=toTok; meterCost=toCost; renderMeter(); }
+  })();
+}
+function bump(t){apiTokens+=Math.ceil(t.length/4);apiCost+=COST_PER_REPLY;animateMeter(apiTokens,apiCost);}
+function reset(){apiChat.innerHTML='';loraChat.innerHTML='';apiTokens=0;apiCost=0;meterTok=0;meterCost=0;meterAnim++;renderMeter();}
+
+async function stream(panel,bubbles,isApi,me){
+  for(const b of bubbles){
+    if(me!==runId)return;
+    const tp=typing(panel); scrollAll();
+    await waitMs(isApi?apiLatency(b.t):humanType(b.t)); if(me!==runId)return;
+    tp.remove(); addReply(panel,b); if(isApi)bump(b.t); scrollAll();
+    await waitMs(isApi?rand(150,300):rand(300,640)); if(me!==runId)return;
+  }
+}
+
+async function play(){
+  const me=++runId; reset(); state='playing'; syncBar();
+  try{
+    for(const item of DATA){
+      if(me!==runId)return;
+      addUser(apiChat,item.prompt,item.pg); addUser(loraChat,item.prompt,item.pg); scrollAll();
+      await waitMs(rand(640,860));
+      await Promise.allSettled([ stream(loraChat,item.lora,false,me), stream(apiChat,item.api,true,me) ]);
+      if(me!==runId||state==='stopped')return;
+      await waitMs(rand(1050,1350));
+    }
+    if(me===runId){ await waitMs(2800); if(me===runId&&state!=='stopped') play(); }   // loop
+  }catch(e){ /* stopped — unwind quietly */ }
+}
+
+/* ── transport ── */
+function pauseToggle(){
+  if(state==='playing'){ state='paused'; }
+  else if(state==='paused'){ state='playing'; }
+  else { play(); return; }            // idle → start
+  syncBar();
+}
+function stopPlay(){
+  state='stopped'; runId++;
+  setTimeout(()=>{ state='idle'; reset(); syncBar(); },50);
+}
+function cycleSpeed(){ speed=SPEEDS[(SPEEDS.indexOf(speed)+1)%SPEEDS.length]; syncBar(); }
+
+function syncBar(){
+  const p=document.getElementById('btnPlay'), s=document.getElementById('btnStop'), sp=document.getElementById('btnSpeed');
+  p.textContent = state==='playing' ? '❚❚ Pause' : (state==='paused' ? '▶ Resume' : '▶ Start');
+  s.disabled = (state==='idle');
+  sp.textContent = speed+'× Speed';
+}
+
+if(PREVIEW_DATA) document.getElementById('banner').style.display='block';
+syncBar();
+if(AUTOPLAY) window.addEventListener('load',()=>setTimeout(play,1700));
+</script>
+</body>
+</html>
