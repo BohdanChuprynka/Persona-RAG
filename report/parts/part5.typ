@@ -42,6 +42,15 @@ The result is honest only with its limits stated plainly.
   confirms the LoRA matches the owner's reply distribution where the bare API does not,
   but supplies no _independent_ lexical-voice validation — so the human panel remains the
   only route to certifying "feels like me".
+- *A cheap post-processor does not reproduce the win.* If the only edges were short
+  replies and the absent `!`, a length cap should erase the gap. It does not. Truncating
+  the bare Arm-B API to the 28-character median real reply and stripping every `!` matches
+  the LoRA on exclamation rate alone (both 0.00). It leaves the LoRA 4.6× closer on reply
+  length ($W_1$ 13.3 vs 2.9), cannot fake the code-switch balance (Latin rate 0.01 against
+  the LoRA's 0.26 and a real 0.24), and the hard truncation _worsens_ bubble shape (JS 0.29
+  vs the raw API's 0.05). The register the fine-tune reproduces — length distribution,
+  language mix, opener spread — is not recoverable by capping length
+  (`scripts/length_cap_baseline.py`, $n = 300$).
 - *The human channel is doubly blocked, so the primary verdict is unresolved.* The
   only rater with standing is the owner, and he is _recall-biased_: he recognizes his
   own messages, so his ability to tell model from real conflates memory with voice.
